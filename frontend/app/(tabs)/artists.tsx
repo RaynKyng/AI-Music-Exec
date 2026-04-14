@@ -1,0 +1,288 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  Alert,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { useDataStore } from '../../src/stores/dataStore';
+import { Card } from '../../src/components/Card';
+import { colors, spacing } from '../../src/utils/theme';
+import { Artist } from '../../src/types';
+
+export default function ArtistsScreen() {
+  const router = useRouter();
+  const { artists, fetchArtists, deleteArtist, isLoading } = useDataStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    fetchArtists();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchArtists();
+    setRefreshing(false);
+  };
+
+  const handleDelete = (artist: Artist) => {
+    Alert.alert(
+      'Delete Artist',
+      `Are you sure you want to delete ${artist.name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteArtist(artist.id);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete artist');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Artist Roster</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/artist/new')}
+        >
+          <Ionicons name="add" size={24} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {artists.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="people-outline" size={64} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>No Artists Yet</Text>
+            <Text style={styles.emptyText}>
+              Start building your roster by adding your first artist
+            </Text>
+            <TouchableOpacity
+              style={styles.emptyButton}
+              onPress={() => router.push('/artist/new')}
+            >
+              <Ionicons name="add" size={20} color={colors.text} />
+              <Text style={styles.emptyButtonText}>Add Artist</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          artists.map((artist) => (
+            <Card
+              key={artist.id}
+              style={styles.artistCard}
+              onPress={() => router.push(`/artist/${artist.id}`)}
+            >
+              <View style={styles.artistHeader}>
+                <View style={styles.artistAvatar}>
+                  <Text style={styles.avatarText}>
+                    {artist.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.artistInfo}>
+                  <Text style={styles.artistName}>{artist.name}</Text>
+                  <Text style={styles.artistGenres}>
+                    {artist.genres.join(' • ') || 'No genres'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => handleDelete(artist)}
+                >
+                  <Ionicons name="trash-outline" size={20} color={colors.error} />
+                </TouchableOpacity>
+              </View>
+              {artist.unique_sound && (
+                <Text style={styles.artistSound} numberOfLines={2}>
+                  {artist.unique_sound}
+                </Text>
+              )}
+              <View style={styles.artistFooter}>
+                <View style={styles.songCount}>
+                  <Ionicons name="disc" size={16} color={colors.textSecondary} />
+                  <Text style={styles.songCountText}>
+                    {artist.song_count} songs
+                  </Text>
+                </View>
+                {artist.themes.length > 0 && (
+                  <View style={styles.themes}>
+                    {artist.themes.slice(0, 3).map((theme, i) => (
+                      <View key={i} style={styles.themeBadge}>
+                        <Text style={styles.themeText}>{theme}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </Card>
+          ))
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  addButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingTop: 0,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 100,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.text,
+    marginTop: spacing.md,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  emptyButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  artistCard: {
+    marginBottom: spacing.md,
+  },
+  artistHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  artistAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  artistInfo: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  artistName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  artistGenres: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  deleteBtn: {
+    padding: spacing.sm,
+  },
+  artistSound: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    fontStyle: 'italic',
+  },
+  artistFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  songCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  songCountText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  themes: {
+    flexDirection: 'row',
+    flex: 1,
+    justifyContent: 'flex-end',
+    gap: spacing.xs,
+  },
+  themeBadge: {
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  themeText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+});
