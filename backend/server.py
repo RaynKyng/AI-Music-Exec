@@ -95,12 +95,25 @@ class Artist(ArtistCreate):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
+# Suno Generation Models
+class SunoGeneration(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    suno_url: str = ""
+    prompt_used: str = ""
+    style_tags: str = ""
+    rating: int = 0  # 0-5 stars
+    is_favorite: bool = False
+    notes: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
 # Song Version Models
 class SongVersion(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     version_type: str  # primary, secondary, alternate
+    version_label: str = ""  # user-friendly label
     audio_url: str = ""
     suno_link: str = ""
+    suno_generations: List[SunoGeneration] = []
     notes: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -117,6 +130,7 @@ class SongCreate(BaseModel):
     notes: str = ""
     todo: List[str] = []
     versions: List[SongVersion] = []
+    suno_generations: List[SunoGeneration] = []  # song-level Suno links
 
 class Song(SongCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -260,8 +274,28 @@ async def create_artist(artist_data: ArtistCreate, current_user: dict = Depends(
     return Artist(**artist_dict)
 
 @api_router.get("/artists", response_model=List[Artist])
-async def get_artists(current_user: dict = Depends(get_current_user)):
-    artists = await db.artists.find({"user_id": current_user["id"]}).to_list(1000)
+async def get_artists(
+    search: Optional[str] = None,
+    genre: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"user_id": current_user["id"]}
+    
+    artists = await db.artists.find(query).to_list(1000)
+    
+    # Apply filters
+    if search:
+        search_lower = search.lower()
+        artists = [a for a in artists if 
+                   search_lower in a.get("name", "").lower() or 
+                   search_lower in a.get("bio", "").lower() or
+                   search_lower in a.get("unique_sound", "").lower()]
+    
+    if genre:
+        genre_lower = genre.lower()
+        artists = [a for a in artists if 
+                   any(genre_lower in g.lower() for g in a.get("genres", []))]
+    
     return [Artist(**a) for a in artists]
 
 @api_router.get("/artists/{artist_id}", response_model=Artist)
@@ -315,6 +349,9 @@ async def create_song(song_data: SongCreate, current_user: dict = Depends(get_cu
 async def get_songs(
     artist_id: Optional[str] = None,
     status: Optional[str] = None,
+    search: Optional[str] = None,
+    genre: Optional[str] = None,
+    has_versions: Optional[bool] = None,
     current_user: dict = Depends(get_current_user)
 ):
     query = {"user_id": current_user["id"]}
@@ -322,8 +359,24 @@ async def get_songs(
         query["artist_id"] = artist_id
     if status:
         query["status"] = status
+    if genre:
+        query["genre"] = {"$regex": genre, "$options": "i"}
+    if has_versions is not None:
+        if has_versions:
+            query["versions"] = {"$exists": True, "$ne": []}
+        else:
+            query["$or"] = [{"versions": {"$exists": False}}, {"versions": []}]
     
     songs = await db.songs.find(query).sort("updated_at", -1).to_list(1000)
+    
+    # Apply text search filter if provided
+    if search:
+        search_lower = search.lower()
+        songs = [s for s in songs if 
+                 search_lower in s.get("title", "").lower() or 
+                 search_lower in s.get("lyrics", "").lower() or
+                 search_lower in s.get("notes", "").lower()]
+    
     return [Song(**s) for s in songs]
 
 @api_router.get("/songs/{song_id}", response_model=Song)
@@ -400,13 +453,25 @@ async def create_idea(idea_data: IdeaCreate, current_user: dict = Depends(get_cu
 @api_router.get("/ideas", response_model=List[Idea])
 async def get_ideas(
     type: Optional[str] = None,
+    search: Optional[str] = None,
+    linked_artist_id: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     query = {"user_id": current_user["id"]}
     if type:
         query["type"] = type
+    if linked_artist_id:
+        query["linked_artist_id"] = linked_artist_id
     
     ideas = await db.ideas.find(query).sort("created_at", -1).to_list(1000)
+    
+    if search:
+        search_lower = search.lower()
+        ideas = [i for i in ideas if 
+                 search_lower in i.get("title", "").lower() or 
+                 search_lower in i.get("content", "").lower() or
+                 any(search_lower in t.lower() for t in i.get("tags", []))]
+    
     return [Idea(**i) for i in ideas]
 
 @api_router.get("/ideas/{idea_id}", response_model=Idea)
@@ -647,6 +712,182 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
 @api_router.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+# ============== Version Management ==============
+
+@api_router.delete("/songs/{song_id}/versions/{version_id}")
+async def delete_song_version(song_id: str, version_id: str, current_user: dict = Depends(get_current_user)):
+    song = await db.songs.find_one({"id": song_id, "user_id": current_user["id"]})
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    
+    await db.songs.update_one(
+        {"id": song_id},
+        {
+            "$pull": {"versions": {"id": version_id}},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    return {"message": "Version deleted"}
+
+# ============== Suno Generation Management ==============
+
+@api_router.post("/songs/{song_id}/suno-generations")
+async def add_suno_generation(song_id: str, gen: SunoGeneration, current_user: dict = Depends(get_current_user)):
+    song = await db.songs.find_one({"id": song_id, "user_id": current_user["id"]})
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    
+    gen_dict = gen.dict()
+    gen_dict["id"] = str(uuid.uuid4())
+    gen_dict["created_at"] = datetime.utcnow()
+    
+    await db.songs.update_one(
+        {"id": song_id},
+        {
+            "$push": {"suno_generations": gen_dict},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    
+    updated = await db.songs.find_one({"id": song_id})
+    return Song(**updated)
+
+@api_router.delete("/songs/{song_id}/suno-generations/{gen_id}")
+async def delete_suno_generation(song_id: str, gen_id: str, current_user: dict = Depends(get_current_user)):
+    song = await db.songs.find_one({"id": song_id, "user_id": current_user["id"]})
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    
+    await db.songs.update_one(
+        {"id": song_id},
+        {
+            "$pull": {"suno_generations": {"id": gen_id}},
+            "$set": {"updated_at": datetime.utcnow()}
+        }
+    )
+    return {"message": "Suno generation deleted"}
+
+# ============== Platform Formatting ==============
+
+class PlatformFormatRequest(BaseModel):
+    song_id: str
+    platforms: List[str] = ["instagram", "tiktok", "youtube", "twitter", "spotify", "apple_music"]
+
+@api_router.post("/songs/{song_id}/format-for-sharing")
+async def format_for_sharing(song_id: str, request: PlatformFormatRequest, current_user: dict = Depends(get_current_user)):
+    song = await db.songs.find_one({"id": song_id, "user_id": current_user["id"]})
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    
+    artist_name = "Unknown Artist"
+    if song.get("artist_id"):
+        artist = await db.artists.find_one({"id": song["artist_id"]})
+        if artist:
+            artist_name = artist["name"]
+    
+    title = song.get("title", "")
+    genre = song.get("genre", "")
+    mood = song.get("mood", "")
+    themes = song.get("themes", [])
+    lyrics_snippet = song.get("lyrics", "")[:200]
+    
+    # Build hashtags from genre, mood, themes
+    hashtags = []
+    if genre:
+        hashtags.append(f"#{genre.replace(' ', '').lower()}")
+    if mood:
+        hashtags.append(f"#{mood.replace(' ', '').lower()}")
+    for theme in themes[:3]:
+        hashtags.append(f"#{theme.replace(' ', '').lower()}")
+    hashtags.extend(["#newmusic", "#aimusic", "#musicproduction"])
+    hashtag_str = " ".join(hashtags)
+    
+    formats = {}
+    
+    if "instagram" in request.platforms:
+        formats["instagram"] = {
+            "caption": f"{title} by {artist_name}\n\n{lyrics_snippet}{'...' if len(song.get('lyrics', '')) > 200 else ''}\n\n{hashtag_str}\n\n#linkinbio",
+            "notes": "Best with square (1:1) or portrait (4:5) image. Use Reels for 15-90sec clips.",
+            "char_limit": 2200,
+        }
+    
+    if "tiktok" in request.platforms:
+        hook = lyrics_snippet[:100] if lyrics_snippet else f"New track: {title}"
+        formats["tiktok"] = {
+            "caption": f"{hook}... {hashtag_str} #fyp #foryoupage",
+            "notes": "Keep captions punchy. Use trending sounds or duet features. 9:16 vertical video.",
+            "char_limit": 2200,
+        }
+    
+    if "youtube" in request.platforms:
+        desc = f"""{title} by {artist_name}
+
+Genre: {genre}
+Mood: {mood}
+
+{lyrics_snippet}{'...' if len(song.get('lyrics', '')) > 200 else ''}
+
+---
+Follow {artist_name}:
+[Spotify Link]
+[Apple Music Link]
+[Instagram Link]
+
+{hashtag_str}"""
+        formats["youtube"] = {
+            "title": f"{artist_name} - {title} (Official Audio)",
+            "description": desc,
+            "tags": [genre, mood] + themes + ["new music", "ai music"],
+            "notes": "Use 16:9 landscape. Add end screen with subscribe button. Chapters if >3min.",
+        }
+    
+    if "twitter" in request.platforms:
+        formats["twitter"] = {
+            "tweet": f"New drop: \"{title}\" by {artist_name}\n\n{lyrics_snippet[:80]}...\n\n{' '.join(hashtags[:4])}\n\n[Link]",
+            "notes": "280 char limit. Thread for longer content. Quote tweet with audio snippet.",
+            "char_limit": 280,
+        }
+    
+    if "spotify" in request.platforms:
+        formats["spotify"] = {
+            "metadata": {
+                "track_title": title,
+                "artist": artist_name,
+                "genre": genre,
+                "mood": mood,
+                "tempo": song.get("tempo", ""),
+                "themes": themes,
+            },
+            "pitch_description": f"{title} is a {mood.lower()} {genre.lower()} track that explores themes of {', '.join(themes[:3]) if themes else 'life and emotion'}.",
+            "notes": "Submit via Spotify for Artists at least 2 weeks before release for playlist consideration.",
+        }
+    
+    if "apple_music" in request.platforms:
+        formats["apple_music"] = {
+            "metadata": {
+                "track_title": title,
+                "artist": artist_name,
+                "genre": genre,
+                "mood_tags": [mood] if mood else [],
+                "themes": themes,
+            },
+            "notes": "Submit via Apple Music for Artists. Include high-res artwork (3000x3000 min).",
+        }
+    
+    if "soundcloud" in request.platforms:
+        formats["soundcloud"] = {
+            "title": f"{artist_name} - {title}",
+            "description": f"{lyrics_snippet}\n\n{hashtag_str}",
+            "tags": [genre, mood] + themes,
+            "notes": "Enable downloads for engagement. Use waveform comments for timestamps.",
+        }
+    
+    return {
+        "song_title": title,
+        "artist_name": artist_name,
+        "formats": formats
+    }
 
 # Include the router in the main app
 app.include_router(api_router)

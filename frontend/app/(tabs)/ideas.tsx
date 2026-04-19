@@ -1,16 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
-  Alert,
-  TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
+  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert,
+  Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,6 +10,7 @@ import { useDataStore } from '../../src/stores/dataStore';
 import { Card } from '../../src/components/Card';
 import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
+import { SearchBar } from '../../src/components/SearchBar';
 import { colors, spacing, ideaTypeColors } from '../../src/utils/theme';
 import { Idea } from '../../src/types';
 
@@ -33,13 +25,15 @@ export default function IdeasScreen() {
   const [newIdea, setNewIdea] = useState({ title: '', content: '', type: 'spark' });
   const [creating, setCreating] = useState(false);
 
+  const [search, setSearch] = useState('');
+
   useEffect(() => {
     fetchIdeas();
   }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchIdeas();
+    await fetchIdeas(typeFilter === 'all' ? undefined : typeFilter, search || undefined);
     setRefreshing(false);
   };
 
@@ -100,6 +94,10 @@ export default function IdeasScreen() {
         >
           <Ionicons name="add" size={24} color={colors.text} />
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.searchWrap}>
+        <SearchBar value={search} onChangeText={(text) => { setSearch(text); fetchIdeas(typeFilter === 'all' ? undefined : typeFilter, text || undefined); }} placeholder="Search ideas..." />
       </View>
 
       <ScrollView
@@ -319,6 +317,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.warning,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  searchWrap: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
   },
   filterScroll: {
     maxHeight: 50,

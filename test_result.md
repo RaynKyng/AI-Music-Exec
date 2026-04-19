@@ -1,304 +1,159 @@
 #====================================================================================================
-# START - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
+# Testing Data
 #====================================================================================================
 
-# THIS SECTION CONTAINS CRITICAL TESTING INSTRUCTIONS FOR BOTH AGENTS
-# BOTH MAIN_AGENT AND TESTING_AGENT MUST PRESERVE THIS ENTIRE BLOCK
-
-# Communication Protocol:
-# If the `testing_agent` is available, main agent should delegate all testing tasks to it.
-#
-# You have access to a file called `test_result.md`. This file contains the complete testing state
-# and history, and is the primary means of communication between main and the testing agent.
-#
-# Main and testing agents must follow this exact format to maintain testing data. 
-# The testing data must be entered in yaml format Below is the data structure:
-# 
-## user_problem_statement: {problem_statement}
-## backend:
-##   - task: "Task name"
-##     implemented: true
-##     working: true  # or false or "NA"
-##     file: "file_path.py"
-##     stuck_count: 0
-##     priority: "high"  # or "medium" or "low"
-##     needs_retesting: false
-##     status_history:
-##         -working: true  # or false or "NA"
-##         -agent: "main"  # or "testing" or "user"
-##         -comment: "Detailed comment about status"
-##
-## frontend:
-##   - task: "Task name"
-##     implemented: true
-##     working: true  # or false or "NA"
-##     file: "file_path.js"
-##     stuck_count: 0
-##     priority: "high"  # or "medium" or "low"
-##     needs_retesting: false
-##     status_history:
-##         -working: true  # or false or "NA"
-##         -agent: "main"  # or "testing" or "user"
-##         -comment: "Detailed comment about status"
-##
-## metadata:
-##   created_by: "main_agent"
-##   version: "1.0"
-##   test_sequence: 0
-##   run_ui: false
-##
-## test_plan:
-##   current_focus:
-##     - "Task name 1"
-##     - "Task name 2"
-##   stuck_tasks:
-##     - "Task name with persistent issues"
-##   test_all: false
-##   test_priority: "high_first"  # or "sequential" or "stuck_first"
-##
-## agent_communication:
-##     -agent: "main"  # or "testing" or "user"
-##     -message: "Communication message between agents"
-
-# Protocol Guidelines for Main agent
-#
-# 1. Update Test Result File Before Testing:
-#    - Main agent must always update the `test_result.md` file before calling the testing agent
-#    - Add implementation details to the status_history
-#    - Set `needs_retesting` to true for tasks that need testing
-#    - Update the `test_plan` section to guide testing priorities
-#    - Add a message to `agent_communication` explaining what you've done
-#
-# 2. Incorporate User Feedback:
-#    - When a user provides feedback that something is or isn't working, add this information to the relevant task's status_history
-#    - Update the working status based on user feedback
-#    - If a user reports an issue with a task that was marked as working, increment the stuck_count
-#    - Whenever user reports issue in the app, if we have testing agent and task_result.md file so find the appropriate task for that and append in status_history of that task to contain the user concern and problem as well 
-#
-# 3. Track Stuck Tasks:
-#    - Monitor which tasks have high stuck_count values or where you are fixing same issue again and again, analyze that when you read task_result.md
-#    - For persistent issues, use websearch tool to find solutions
-#    - Pay special attention to tasks in the stuck_tasks list
-#    - When you fix an issue with a stuck task, don't reset the stuck_count until the testing agent confirms it's working
-#
-# 4. Provide Context to Testing Agent:
-#    - When calling the testing agent, provide clear instructions about:
-#      - Which tasks need testing (reference the test_plan)
-#      - Any authentication details or configuration needed
-#      - Specific test scenarios to focus on
-#      - Any known issues or edge cases to verify
-#
-# 5. Call the testing agent with specific instructions referring to test_result.md
-#
-# IMPORTANT: Main agent must ALWAYS update test_result.md BEFORE calling the testing agent, as it relies on this file to understand what to test next.
-
-#====================================================================================================
-# END - Testing Protocol - DO NOT EDIT OR REMOVE THIS SECTION
-#====================================================================================================
-
-
-
-#====================================================================================================
-# Testing Data - Main Agent and testing sub agent both should log testing data below this section
-#====================================================================================================
-
-user_problem_statement: "Build an AI Music Artist Management app with artist roster, song catalog, quick ideas, AI-powered analysis, Suno prompt generation, and distribution tracking"
+user_problem_statement: "Build an AI Music Artist Management app - now adding 4 features: search/filtering, platform-specific sharing, Suno generation tracking, distribution UI"
 
 backend:
-  - task: "Authentication (Register/Login)"
+  - task: "Search Endpoints (Artists, Songs, Ideas)"
     implemented: true
     working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "JWT-based auth with bcrypt password hashing implemented and tested via curl"
+        comment: "Added search query params to artists, songs, ideas endpoints"
 
-  - task: "Artist CRUD Operations"
+  - task: "Platform Formatting Endpoint"
     implemented: true
     working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Full CRUD for artists with branding, genres, themes, tone, patterns"
+        comment: "POST /api/songs/{id}/format-for-sharing generates platform-specific content for Instagram, TikTok, YouTube, Twitter, Spotify, Apple Music, SoundCloud"
 
-  - task: "Song CRUD with Versions"
+  - task: "Suno Generation CRUD"
     implemented: true
     working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Songs with primary/secondary/alternate versions, status tracking, todos"
+        comment: "POST/DELETE /api/songs/{id}/suno-generations for tracking Suno links, prompts, ratings"
 
-  - task: "Ideas CRUD"
+  - task: "Distribution CRUD"
     implemented: true
     working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Ideas with types (spark, concept, lyrics, melody, style, visual), tags, linking"
+        comment: "Full CRUD for distributions with platform entries, status tracking"
 
-  - task: "AI Analysis Endpoints"
-    implemented: true
-    working: true
-    file: "/app/backend/server.py"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-      - working: true
-        agent: "main"
-        comment: "AI content analysis and Suno prompt generation using OpenAI GPT-5.2 via Emergent LLM key"
-
-  - task: "Dashboard Stats"
+  - task: "Version Delete Endpoint"
     implemented: true
     working: true
     file: "/app/backend/server.py"
     stuck_count: 0
     priority: "medium"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Dashboard stats endpoint with counts, status breakdown, recent activity"
+        comment: "DELETE /api/songs/{id}/versions/{version_id}"
 
 frontend:
-  - task: "Login/Register Screen"
+  - task: "Search Bars on Artists/Songs/Ideas tabs"
     implemented: true
     working: true
-    file: "/app/frontend/app/index.tsx"
+    file: "/app/frontend/app/(tabs)/artists.tsx, songs.tsx, ideas.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Beautiful auth screen with toggle between login/register, validated via screenshot"
+        comment: "SearchBar component added to all three tabs with debounced API calls"
 
-  - task: "Dashboard Tab"
-    implemented: true
-    working: true
-    file: "/app/frontend/app/(tabs)/index.tsx"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-      - working: true
-        agent: "main"
-        comment: "Dashboard with stats cards, song status breakdown, recent activity"
-
-  - task: "Artists Tab"
-    implemented: true
-    working: true
-    file: "/app/frontend/app/(tabs)/artists.tsx"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-      - working: true
-        agent: "main"
-        comment: "Artist roster with cards, empty state, add button"
-
-  - task: "Songs Tab"
+  - task: "Artist Filter on Songs Tab"
     implemented: true
     working: true
     file: "/app/frontend/app/(tabs)/songs.tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Song catalog with status filters, version indicators, todo counts"
+        comment: "Horizontal artist filter chips on Songs tab, combined with status filter"
 
-  - task: "Ideas Tab"
+  - task: "Platform Sharing Screen"
     implemented: true
     working: true
-    file: "/app/frontend/app/(tabs)/ideas.tsx"
+    file: "/app/frontend/app/song/share/[id].tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Ideas with type filters, quick capture modal, tag support"
+        comment: "Full sharing screen with expandable platform cards, copy-to-clipboard, formatted content for 7 platforms"
 
-  - task: "AI Tools Tab"
+  - task: "Distribution Tracking Screen"
     implemented: true
     working: true
-    file: "/app/frontend/app/(tabs)/ai.tsx"
+    file: "/app/frontend/app/song/distribution/[id].tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "AI tools with Suno prompt generator and content analyzer"
+        comment: "Distribution screen with platform cards, status badges, URL tracking, edit modal"
 
-  - task: "Artist Detail/Edit Screen"
-    implemented: true
-    working: true
-    file: "/app/frontend/app/artist/[id].tsx"
-    stuck_count: 0
-    priority: "high"
-    needs_retesting: false
-    status_history:
-      - working: true
-        agent: "main"
-        comment: "Full artist form with branding, genres, themes, patterns sections"
-
-  - task: "Song Detail/Edit Screen"
+  - task: "Suno Generations Section in Song Detail"
     implemented: true
     working: true
     file: "/app/frontend/app/song/[id].tsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: false
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Song form with lyrics, style prompt, versions, todos, status"
+        comment: "Suno generations list with add modal, rating stars, delete, URL/prompt tracking"
 
-  - task: "Idea Detail/Edit Screen"
+  - task: "Share & Distribution Action Buttons"
     implemented: true
     working: true
-    file: "/app/frontend/app/idea/[id].tsx"
+    file: "/app/frontend/app/song/[id].tsx"
     stuck_count: 0
-    priority: "medium"
-    needs_retesting: false
+    priority: "high"
+    needs_retesting: true
     status_history:
       - working: true
         agent: "main"
-        comment: "Idea form with type selection, content, tags, artist/song linking"
+        comment: "Share and Distribution action buttons at bottom of song detail"
 
 metadata:
   created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 1
-  run_ui: false
+  version: "2.0"
+  test_sequence: 2
+  run_ui: true
 
 test_plan:
   current_focus:
-    - "All features implemented and screenshot tested"
+    - "Search functionality on all tabs"
+    - "Platform sharing format generation"
+    - "Distribution tracking UI"
+    - "Suno generation tracking"
   stuck_tasks: []
-  test_all: false
+  test_all: true
   test_priority: "high_first"
 
 agent_communication:
   - agent: "main"
-    message: "MVP completed with all core features: Artist roster, Song catalog with versions, Ideas capture, AI Tools for Suno prompts and content analysis. All tabs and screens created and screenshot tested."
+    message: "Implemented all 4 features: 1) Search bars on Artists/Songs/Ideas with backend search support, 2) Platform-specific sharing screen at /song/share/{id}, 3) Distribution tracking at /song/distribution/{id}, 4) Suno generation management in song detail with add/delete/rate. All accessible from song detail screen via Share and Distribution action buttons."

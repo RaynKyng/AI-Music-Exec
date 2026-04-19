@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Artist, Song, Idea, Distribution, DashboardStats } from '../types';
+import { Artist, Song, Idea, Distribution, DashboardStats, SunoGeneration, SharingFormats } from '../types';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -27,20 +27,25 @@ interface DataState {
   isLoading: boolean;
   
   // Artists
-  fetchArtists: () => Promise<void>;
+  fetchArtists: (search?: string, genre?: string) => Promise<void>;
   createArtist: (data: Partial<Artist>) => Promise<Artist>;
   updateArtist: (id: string, data: Partial<Artist>) => Promise<Artist>;
   deleteArtist: (id: string) => Promise<void>;
   
   // Songs
-  fetchSongs: (artistId?: string, status?: string) => Promise<void>;
+  fetchSongs: (artistId?: string, status?: string, search?: string, genre?: string) => Promise<void>;
   createSong: (data: Partial<Song>) => Promise<Song>;
   updateSong: (id: string, data: Partial<Song>) => Promise<Song>;
   deleteSong: (id: string) => Promise<void>;
   addSongVersion: (songId: string, version: Partial<Song['versions'][0]>) => Promise<Song>;
+  deleteSongVersion: (songId: string, versionId: string) => Promise<void>;
+  
+  // Suno Generations
+  addSunoGeneration: (songId: string, gen: Partial<SunoGeneration>) => Promise<Song>;
+  deleteSunoGeneration: (songId: string, genId: string) => Promise<void>;
   
   // Ideas
-  fetchIdeas: (type?: string) => Promise<void>;
+  fetchIdeas: (type?: string, search?: string) => Promise<void>;
   createIdea: (data: Partial<Idea>) => Promise<Idea>;
   updateIdea: (id: string, data: Partial<Idea>) => Promise<Idea>;
   deleteIdea: (id: string) => Promise<void>;
@@ -56,6 +61,9 @@ interface DataState {
   // AI
   analyzeContent: (content: string, analysisType: string, artistId?: string) => Promise<any>;
   generateSunoPrompt: (genre: string, mood: string, tempo?: string, vocals?: string, instruments?: string) => Promise<string>;
+  
+  // Sharing
+  getShareFormats: (songId: string, platforms: string[]) => Promise<SharingFormats>;
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -67,10 +75,14 @@ export const useDataStore = create<DataState>((set, get) => ({
   isLoading: false,
 
   // Artists
-  fetchArtists: async () => {
+  fetchArtists: async (search, genre) => {
     set({ isLoading: true });
     try {
-      const res = await authFetch(`${API_URL}/api/artists`);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (genre) params.append('genre', genre);
+      const qs = params.toString();
+      const res = await authFetch(`${API_URL}/api/artists${qs ? '?' + qs : ''}`);
       const data = await res.json();
       set({ artists: data, isLoading: false });
     } catch {
@@ -107,16 +119,17 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   // Songs
-  fetchSongs: async (artistId, status) => {
+  fetchSongs: async (artistId, status, search, genre) => {
     set({ isLoading: true });
     try {
-      let url = `${API_URL}/api/songs`;
       const params = new URLSearchParams();
       if (artistId) params.append('artist_id', artistId);
       if (status) params.append('status', status);
-      if (params.toString()) url += `?${params.toString()}`;
+      if (search) params.append('search', search);
+      if (genre) params.append('genre', genre);
+      const qs = params.toString();
       
-      const res = await authFetch(url);
+      const res = await authFetch(`${API_URL}/api/songs${qs ? '?' + qs : ''}`);
       const data = await res.json();
       set({ songs: data, isLoading: false });
     } catch {
@@ -163,13 +176,52 @@ export const useDataStore = create<DataState>((set, get) => ({
     return song;
   },
 
+  deleteSongVersion: async (songId, versionId) => {
+    const res = await authFetch(`${API_URL}/api/songs/${songId}/versions/${versionId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete version');
+    // Refetch the song
+    const songRes = await authFetch(`${API_URL}/api/songs/${songId}`);
+    if (songRes.ok) {
+      const song = await songRes.json();
+      set({ songs: get().songs.map(s => s.id === songId ? song : s) });
+    }
+  },
+
+  // Suno Generations
+  addSunoGeneration: async (songId, gen) => {
+    const res = await authFetch(`${API_URL}/api/songs/${songId}/suno-generations`, {
+      method: 'POST',
+      body: JSON.stringify(gen),
+    });
+    if (!res.ok) throw new Error('Failed to add Suno generation');
+    const song = await res.json();
+    set({ songs: get().songs.map(s => s.id === songId ? song : s) });
+    return song;
+  },
+
+  deleteSunoGeneration: async (songId, genId) => {
+    const res = await authFetch(`${API_URL}/api/songs/${songId}/suno-generations/${genId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to delete generation');
+    const songRes = await authFetch(`${API_URL}/api/songs/${songId}`);
+    if (songRes.ok) {
+      const song = await songRes.json();
+      set({ songs: get().songs.map(s => s.id === songId ? song : s) });
+    }
+  },
+
   // Ideas
-  fetchIdeas: async (type) => {
+  fetchIdeas: async (type, search) => {
     set({ isLoading: true });
     try {
-      let url = `${API_URL}/api/ideas`;
-      if (type) url += `?type=${type}`;
-      const res = await authFetch(url);
+      const params = new URLSearchParams();
+      if (type) params.append('type', type);
+      if (search) params.append('search', search);
+      const qs = params.toString();
+      const res = await authFetch(`${API_URL}/api/ideas${qs ? '?' + qs : ''}`);
       const data = await res.json();
       set({ ideas: data, isLoading: false });
     } catch {
@@ -270,5 +322,15 @@ export const useDataStore = create<DataState>((set, get) => ({
     if (!res.ok) throw new Error('Prompt generation failed');
     const data = await res.json();
     return data.suno_prompt;
+  },
+
+  // Sharing
+  getShareFormats: async (songId, platforms) => {
+    const res = await authFetch(`${API_URL}/api/songs/${songId}/format-for-sharing`, {
+      method: 'POST',
+      body: JSON.stringify({ song_id: songId, platforms }),
+    });
+    if (!res.ok) throw new Error('Failed to get sharing formats');
+    return res.json();
   },
 }));

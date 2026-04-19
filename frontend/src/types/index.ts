@@ -30,11 +30,24 @@ export interface Artist {
   updated_at: string;
 }
 
+export interface SunoGeneration {
+  id: string;
+  suno_url: string;
+  prompt_used: string;
+  style_tags: string;
+  rating: number;
+  is_favorite: boolean;
+  notes: string;
+  created_at: string;
+}
+
 export interface SongVersion {
   id: string;
   version_type: 'primary' | 'secondary' | 'alternate';
+  version_label: string;
   audio_url: string;
   suno_link: string;
+  suno_generations: SunoGeneration[];
   notes: string;
   created_at: string;
 }
@@ -54,6 +67,7 @@ export interface Song {
   notes: string;
   todo: string[];
   versions: SongVersion[];
+  suno_generations: SunoGeneration[];
   created_at: string;
   updated_at: string;
 }
@@ -101,4 +115,22 @@ export interface DashboardStats {
   };
   recent_songs: { id: string; title: string; status: string }[];
   recent_ideas: { id: string; title: string; type: string }[];
+}
+
+export interface PlatformFormat {
+  caption?: string;
+  tweet?: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  metadata?: Record<string, any>;
+  pitch_description?: string;
+  notes: string;
+  char_limit?: number;
+}
+
+export interface SharingFormats {
+  song_title: string;
+  artist_name: string;
+  formats: Record<string, PlatformFormat>;
 }

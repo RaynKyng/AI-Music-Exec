@@ -28,11 +28,12 @@ export default function SongDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
-  const { songs, artists, createSong, updateSong, addSongVersion, fetchSongs, fetchArtists } = useDataStore();
+  const { songs, artists, createSong, updateSong, addSongVersion, addSunoGeneration, deleteSunoGeneration, deleteSongVersion, fetchSongs, fetchArtists } = useDataStore();
   
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [showVersionModal, setShowVersionModal] = useState(false);
+  const [showSunoModal, setShowSunoModal] = useState(false);
   const [form, setForm] = useState({
     title: '',
     artist_id: null as string | null,
@@ -46,6 +47,7 @@ export default function SongDetailScreen() {
     notes: '',
     todo: [] as string[],
     versions: [] as Song['versions'],
+    suno_generations: [] as any[],
   });
   
   const [themeInput, setThemeInput] = useState('');
@@ -81,6 +83,7 @@ export default function SongDetailScreen() {
         notes: song.notes,
         todo: song.todo,
         versions: song.versions,
+        suno_generations: song.suno_generations || [],
       });
     }
     setLoading(false);
@@ -386,6 +389,61 @@ export default function SongDetailScreen() {
             style={styles.saveBtn}
           />
 
+          {!isNew && (
+            <>
+              {/* Suno Generations Section */}
+              <Card style={styles.section}>
+                <View style={styles.sectionHeader}>
+                  <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Suno Generations ({form.suno_generations?.length || 0})</Text>
+                  <TouchableOpacity style={styles.addVersionBtn} onPress={() => setShowSunoModal(true)}>
+                    <Ionicons name="add" size={20} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                {(form.suno_generations || []).map((gen: any, i: number) => (
+                  <View key={gen.id || i} style={styles.sunoItem}>
+                    <View style={styles.sunoHeader}>
+                      <Ionicons name="link" size={16} color={colors.primary} />
+                      <Text style={styles.sunoUrl} numberOfLines={1}>{gen.suno_url || 'No URL'}</Text>
+                      {gen.is_favorite && <Ionicons name="star" size={16} color={colors.warning} />}
+                      <TouchableOpacity onPress={() => {
+                        Alert.alert('Delete', 'Remove this generation?', [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Delete', style: 'destructive', onPress: () => deleteSunoGeneration(id!, gen.id).then(loadSong) },
+                        ]);
+                      }}>
+                        <Ionicons name="trash-outline" size={16} color={colors.error} />
+                      </TouchableOpacity>
+                    </View>
+                    {gen.prompt_used ? <Text style={styles.sunoPrompt} numberOfLines={2}>Prompt: {gen.prompt_used}</Text> : null}
+                    {gen.notes ? <Text style={styles.sunoNotes} numberOfLines={1}>{gen.notes}</Text> : null}
+                    {gen.rating > 0 && (
+                      <View style={styles.ratingRow}>
+                        {[1,2,3,4,5].map(s => (
+                          <Ionicons key={s} name={s <= gen.rating ? 'star' : 'star-outline'} size={14} color={colors.warning} />
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))}
+                {(!form.suno_generations || form.suno_generations.length === 0) && (
+                  <Text style={styles.noVersions}>No Suno generations tracked yet</Text>
+                )}
+              </Card>
+
+              {/* Quick Actions */}
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/song/share/${id}`)}>
+                  <Ionicons name="share-social" size={22} color={colors.text} />
+                  <Text style={styles.actionText}>Share</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.secondary }]} onPress={() => router.push(`/song/distribution/${id}`)}>
+                  <Ionicons name="globe" size={22} color={colors.text} />
+                  <Text style={styles.actionText}>Distribution</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+
           <View style={styles.bottomPadding} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -452,9 +510,75 @@ export default function SongDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Suno Generation Modal */}
+      <Modal visible={showSunoModal} animationType="slide" transparent onRequestClose={() => setShowSunoModal(false)}>
+        <SunoGenModal
+          visible={showSunoModal}
+          onClose={() => setShowSunoModal(false)}
+          onSave={async (gen: any) => {
+            if (!id || isNew) return;
+            try {
+              await addSunoGeneration(id, gen);
+              await loadSong();
+              setShowSunoModal(false);
+            } catch (error) {
+              Alert.alert('Error', 'Failed to add generation');
+            }
+          }}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
+
+function SunoGenModal({ visible, onClose, onSave }: { visible: boolean; onClose: () => void; onSave: (gen: any) => void }) {
+  const [sunoUrl, setSunoUrl] = useState('');
+  const [promptUsed, setPromptUsed] = useState('');
+  const [rating, setRating] = useState(0);
+  const [notes, setNotes] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({ suno_url: sunoUrl, prompt_used: promptUsed, rating, notes, style_tags: '', is_favorite: false });
+    setSunoUrl(''); setPromptUsed(''); setRating(0); setNotes('');
+    setSaving(false);
+  };
+
+  return (
+    <View style={sunoStyles.modalContainer}>
+      <View style={sunoStyles.modalContent}>
+        <View style={sunoStyles.modalHeader}>
+          <Text style={sunoStyles.modalTitle}>Add Suno Generation</Text>
+          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+        </View>
+        <Input label="Suno URL" placeholder="https://suno.com/song/..." value={sunoUrl} onChangeText={setSunoUrl} autoCapitalize="none" />
+        <Input label="Prompt Used" placeholder="The style prompt used for generation" value={promptUsed} onChangeText={setPromptUsed} multiline />
+        <Text style={sunoStyles.label}>Rating</Text>
+        <View style={sunoStyles.ratingRow}>
+          {[1,2,3,4,5].map(s => (
+            <TouchableOpacity key={s} onPress={() => setRating(s === rating ? 0 : s)}>
+              <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={28} color={colors.warning} />
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Input label="Notes" placeholder="Notes about this generation..." value={notes} onChangeText={setNotes} multiline />
+        <Button title="Add Generation" onPress={handleSave} loading={saving} style={sunoStyles.btn} />
+      </View>
+    </View>
+  );
+}
+
+const sunoStyles = StyleSheet.create({
+  modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: spacing.xxl },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.lg },
+  modalTitle: { fontSize: 20, fontWeight: '600', color: colors.text },
+  label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
+  ratingRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  btn: { marginTop: spacing.md },
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -716,5 +840,59 @@ const styles = StyleSheet.create({
   },
   modalBtn: {
     marginTop: spacing.md,
+  },
+  sunoItem: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 8,
+    padding: spacing.sm,
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  sunoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  sunoUrl: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.primary,
+  },
+  sunoPrompt: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  sunoNotes: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    gap: 2,
+    marginTop: 4,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  actionText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
   },
 });
