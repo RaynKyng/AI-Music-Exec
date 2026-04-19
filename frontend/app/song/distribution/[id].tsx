@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, Pressable, Alert, Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -113,9 +113,9 @@ export default function DistributionScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={styles.title}>Distribution</Text>
         <View style={styles.placeholder} />
       </View>
@@ -164,9 +164,9 @@ export default function DistributionScreen() {
               <Text style={styles.modalTitle}>
                 {PLATFORMS.find(p => p.id === editPlatform)?.label || 'Platform'}
               </Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Pressable onPress={() => setModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <Input label="URL" placeholder="https://..." value={editUrl} onChangeText={setEditUrl} autoCapitalize="none" />
@@ -174,11 +174,11 @@ export default function DistributionScreen() {
             <Text style={styles.label}>Status</Text>
             <View style={styles.statusRow}>
               {STATUS_OPTIONS.map((status) => (
-                <TouchableOpacity key={status.id}
+                <Pressable key={status.id}
                   style={[styles.statusChip, editStatus === status.id && { backgroundColor: status.color }]}
                   onPress={() => setEditStatus(status.id)}>
                   <Text style={[styles.statusChipText, editStatus === status.id && { color: colors.text }]}>{status.label}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
 

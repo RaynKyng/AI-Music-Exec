@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, RefreshControl, Pressable, Alert,
   Modal, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,9 +15,7 @@ import { useDataStore } from '../../src/stores/dataStore';
 import { colors, spacing } from '../../src/utils/theme';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album'];
-const STATUS_OPTS = ['in_progress', 'completed', 'released'];
 
 export default function CollectionsScreen() {
   const router = useRouter();
@@ -82,9 +80,9 @@ export default function CollectionsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Releases</Text>
-        <TouchableOpacity testID="add-collection-btn" style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <Pressable testID="add-collection-btn" style={styles.addButton} onPress={() => setModalVisible(true)}>
           <Ionicons name="add" size={24} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       <View style={styles.searchWrap}>
@@ -98,14 +96,14 @@ export default function CollectionsScreen() {
             <Ionicons name="albums-outline" size={64} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No Releases Yet</Text>
             <Text style={styles.emptyText}>Organize songs into EPs, LPs, and Albums</Text>
-            <TouchableOpacity style={styles.emptyButton} onPress={() => setModalVisible(true)}>
+            <Pressable style={styles.emptyButton} onPress={() => setModalVisible(true)}>
               <Ionicons name="add" size={20} color={colors.text} />
               <Text style={styles.emptyButtonText}>New Release</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ) : (
           filtered.map((coll) => (
-            <Card key={coll.id} style={styles.collCard}>
+            <Card key={coll.id} style={styles.collCard} onPress={() => router.push(`/collection/${coll.id}`)}>
               <View style={styles.collRow}>
                 {coll.cover_image_url ? (
                   <Image source={{ uri: coll.cover_image_url }} style={styles.coverImg} />
@@ -125,9 +123,9 @@ export default function CollectionsScreen() {
                     <Text style={[styles.statusLabel, { color: statusColor(coll.status) }]}>{coll.status.replace('_', ' ')}</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => handleDelete(coll)}>
+                <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(coll); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.trackCount}>
                 <Ionicons name="musical-notes" size={14} color={colors.textSecondary} />
@@ -139,28 +137,29 @@ export default function CollectionsScreen() {
         )}
       </ScrollView>
 
+      {/* Create Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New Release</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+              <Pressable onPress={() => setModalVisible(false)}><Ionicons name="close" size={24} color={colors.text} /></Pressable>
             </View>
             <Input label="Title" placeholder="Album/EP name" value={form.title} onChangeText={t => setForm({...form, title: t})} />
             <Text style={styles.label}>Artist</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
               {artists.map(a => (
-                <TouchableOpacity key={a.id} style={[styles.chip, form.artist_id === a.id && styles.chipActive]} onPress={() => setForm({...form, artist_id: a.id})}>
+                <Pressable key={a.id} style={[styles.chip, form.artist_id === a.id && styles.chipActive]} onPress={() => setForm({...form, artist_id: a.id})}>
                   <Text style={[styles.chipText, form.artist_id === a.id && styles.chipTextActive]}>{a.name}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
             <Text style={styles.label}>Type</Text>
             <View style={styles.typeRow}>
               {COLL_TYPES.map(t => (
-                <TouchableOpacity key={t} style={[styles.chip, form.collection_type === t && styles.chipActive]} onPress={() => setForm({...form, collection_type: t})}>
+                <Pressable key={t} style={[styles.chip, form.collection_type === t && styles.chipActive]} onPress={() => setForm({...form, collection_type: t})}>
                   <Text style={[styles.chipText, form.collection_type === t && styles.chipTextActive]}>{t}</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
             <Input label="Cover Art URL" placeholder="https://..." value={form.cover_image_url} onChangeText={t => setForm({...form, cover_image_url: t})} autoCapitalize="none" />
@@ -198,6 +197,7 @@ const styles = StyleSheet.create({
   typeText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusLabel: { fontSize: 11, fontWeight: '500', textTransform: 'capitalize' },
+  deleteBtn: { padding: spacing.sm, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   trackCount: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
   trackText: { fontSize: 13, color: colors.textSecondary },
   collDesc: { fontSize: 13, color: colors.textMuted, marginTop: spacing.xs },

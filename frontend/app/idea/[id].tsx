@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -105,9 +105,9 @@ export default function IdeaDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={styles.title}>{isNew ? 'New Idea' : 'Edit Idea'}</Text>
         <View style={styles.placeholder} />
       </View>
@@ -121,7 +121,7 @@ export default function IdeaDetailScreen() {
             <Text style={styles.sectionTitle}>Idea Type</Text>
             <View style={styles.typeGrid}>
               {IDEA_TYPES.map((type) => (
-                <TouchableOpacity
+                <Pressable
                   key={type}
                   style={[
                     styles.typeChip,
@@ -150,7 +150,7 @@ export default function IdeaDetailScreen() {
                   >
                     {type}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           </Card>
@@ -184,16 +184,16 @@ export default function IdeaDetailScreen() {
                 containerStyle={styles.tagInput}
                 onSubmitEditing={addTag}
               />
-              <TouchableOpacity style={styles.addTagBtn} onPress={addTag}>
+              <Pressable style={styles.addTagBtn} onPress={addTag}>
                 <Ionicons name="add" size={20} color={colors.text} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
             <View style={styles.tagList}>
               {form.tags.map((tag, i) => (
-                <TouchableOpacity key={i} style={styles.tag} onPress={() => removeTag(i)}>
+                <Pressable key={i} style={styles.tag} onPress={() => removeTag(i)}>
                   <Text style={styles.tagText}>#{tag}</Text>
                   <Ionicons name="close" size={14} color={colors.textSecondary} />
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           </Card>
@@ -201,7 +201,7 @@ export default function IdeaDetailScreen() {
           <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Link to Artist (Optional)</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <TouchableOpacity
+              <Pressable
                 style={[
                   styles.linkChip,
                   !form.linked_artist_id && styles.linkChipActive,
@@ -211,9 +211,9 @@ export default function IdeaDetailScreen() {
                 <Text style={[styles.linkText, !form.linked_artist_id && styles.linkTextActive]}>
                   None
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
               {artists.map((artist) => (
-                <TouchableOpacity
+                <Pressable
                   key={artist.id}
                   style={[
                     styles.linkChip,
@@ -229,7 +229,7 @@ export default function IdeaDetailScreen() {
                   >
                     {artist.name}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
           </Card>
@@ -237,7 +237,7 @@ export default function IdeaDetailScreen() {
           <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Link to Song (Optional)</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <TouchableOpacity
+              <Pressable
                 style={[
                   styles.linkChip,
                   !form.linked_song_id && styles.linkChipActive,
@@ -247,9 +247,9 @@ export default function IdeaDetailScreen() {
                 <Text style={[styles.linkText, !form.linked_song_id && styles.linkTextActive]}>
                   None
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
               {songs.map((song) => (
-                <TouchableOpacity
+                <Pressable
                   key={song.id}
                   style={[
                     styles.linkChip,
@@ -265,7 +265,7 @@ export default function IdeaDetailScreen() {
                   >
                     {song.title}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
           </Card>

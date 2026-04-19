@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -148,9 +148,9 @@ export default function ArtistDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={styles.title}>{isNew ? 'New Artist' : 'Edit Artist'}</Text>
         <View style={styles.placeholder} />
       </View>
@@ -174,7 +174,7 @@ export default function ArtistDetailScreen() {
                 </View>
               )}
               <View style={styles.imageButtons}>
-                <TouchableOpacity style={styles.imgBtn} onPress={async () => {
+                <Pressable style={styles.imgBtn} onPress={async () => {
                   try {
                     const result = await ImagePicker.launchImageLibraryAsync({
                       mediaTypes: ['images'],
@@ -190,15 +190,15 @@ export default function ArtistDetailScreen() {
                 }}>
                   <Ionicons name="image" size={18} color={colors.text} />
                   <Text style={styles.imgBtnText}>Upload</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.imgBtn} onPress={() => {
+                </Pressable>
+                <Pressable style={styles.imgBtn} onPress={() => {
                   Alert.prompt ? Alert.prompt('Image URL', 'Paste image URL:', (url) => {
                     if (url) setForm({ ...form, image_url: url, profile_image: '' });
                   }) : setForm({ ...form });
                 }}>
                   <Ionicons name="link" size={18} color={colors.text} />
                   <Text style={styles.imgBtnText}>URL</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </View>
             <Input
@@ -270,23 +270,23 @@ export default function ArtistDetailScreen() {
                   containerStyle={styles.tagInput}
                   onSubmitEditing={() => addTag('genres', genreInput)}
                 />
-                <TouchableOpacity
+                <Pressable
                   style={styles.addTagBtn}
                   onPress={() => addTag('genres', genreInput)}
                 >
                   <Ionicons name="add" size={20} color={colors.text} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.tagList}>
                 {form.genres.map((genre, i) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
                     style={styles.tag}
                     onPress={() => removeTag('genres', i)}
                   >
                     <Text style={styles.tagText}>{genre}</Text>
                     <Ionicons name="close" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -301,23 +301,23 @@ export default function ArtistDetailScreen() {
                   containerStyle={styles.tagInput}
                   onSubmitEditing={() => addTag('themes', themeInput)}
                 />
-                <TouchableOpacity
+                <Pressable
                   style={styles.addTagBtn}
                   onPress={() => addTag('themes', themeInput)}
                 >
                   <Ionicons name="add" size={20} color={colors.text} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.tagList}>
                 {form.themes.map((theme, i) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
                     style={styles.tag}
                     onPress={() => removeTag('themes', i)}
                   >
                     <Text style={styles.tagText}>{theme}</Text>
                     <Ionicons name="close" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -332,23 +332,23 @@ export default function ArtistDetailScreen() {
                   containerStyle={styles.tagInput}
                   onSubmitEditing={() => addTag('patterns', patternInput)}
                 />
-                <TouchableOpacity
+                <Pressable
                   style={styles.addTagBtn}
                   onPress={() => addTag('patterns', patternInput)}
                 >
                   <Ionicons name="add" size={20} color={colors.text} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.tagList}>
                 {form.patterns.map((pattern, i) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
                     style={styles.tag}
                     onPress={() => removeTag('patterns', i)}
                   >
                     <Text style={styles.tagText}>{pattern}</Text>
                     <Ionicons name="close" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -379,23 +379,23 @@ export default function ArtistDetailScreen() {
                   containerStyle={styles.tagInput}
                   onSubmitEditing={() => addTag('mood_keywords', moodInput)}
                 />
-                <TouchableOpacity
+                <Pressable
                   style={styles.addTagBtn}
                   onPress={() => addTag('mood_keywords', moodInput)}
                 >
                   <Ionicons name="add" size={20} color={colors.text} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.tagList}>
                 {form.branding.mood_keywords.map((mood, i) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={i}
                     style={styles.tag}
                     onPress={() => removeTag('mood_keywords', i)}
                   >
                     <Text style={styles.tagText}>{mood}</Text>
                     <Ionicons name="close" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -428,11 +428,11 @@ export default function ArtistDetailScreen() {
           </Card>
 
           {!isNew && (
-            <TouchableOpacity style={styles.briefBtn} onPress={() => router.push(`/artist/brief/${id}`)}>
+            <Pressable style={styles.briefBtn} onPress={() => router.push(`/artist/brief/${id}`)}>
               <Ionicons name="document-text" size={20} color={colors.text} />
               <Text style={styles.briefBtnText}>View Artist Brief</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
-            </TouchableOpacity>
+            </Pressable>
           )}
 
           {!isNew && (

@@ -4,7 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
+  Pressable,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -191,9 +191,9 @@ export default function SongDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={styles.title}>{isNew ? 'New Song' : 'Edit Song'}</Text>
         <View style={styles.placeholder} />
       </View>
@@ -218,7 +218,7 @@ export default function SongDetailScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.artistScroll}
             >
-              <TouchableOpacity
+              <Pressable
                 style={[
                   styles.artistChip,
                   !form.artist_id && styles.artistChipActive,
@@ -228,9 +228,9 @@ export default function SongDetailScreen() {
                 <Text style={[styles.artistChipText, !form.artist_id && styles.artistChipTextActive]}>
                   Unassigned
                 </Text>
-              </TouchableOpacity>
+              </Pressable>
               {artists.map((artist) => (
-                <TouchableOpacity
+                <Pressable
                   key={artist.id}
                   style={[
                     styles.artistChip,
@@ -246,7 +246,7 @@ export default function SongDetailScreen() {
                   >
                     {artist.name}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
 
@@ -256,7 +256,7 @@ export default function SongDetailScreen() {
               {artists.filter(a => a.id !== form.artist_id).map((artist) => {
                 const isFeatured = form.featured_artist_ids.includes(artist.id);
                 return (
-                  <TouchableOpacity key={artist.id}
+                  <Pressable key={artist.id}
                     style={[styles.artistChip, isFeatured && { backgroundColor: colors.warning }]}
                     onPress={() => {
                       if (isFeatured) {
@@ -266,7 +266,7 @@ export default function SongDetailScreen() {
                       }
                     }}>
                     <Text style={[styles.artistChipText, isFeatured && styles.artistChipTextActive]}>{artist.name}</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                 );
               })}
             </ScrollView>
@@ -281,17 +281,17 @@ export default function SongDetailScreen() {
             {/* Collection picker */}
             <Text style={styles.label}>Release / Project</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
-              <TouchableOpacity style={[styles.artistChip, !form.collection_id && styles.artistChipActive]}
+              <Pressable style={[styles.artistChip, !form.collection_id && styles.artistChipActive]}
                 onPress={() => setForm({ ...form, collection_id: null })}>
                 <Text style={[styles.artistChipText, !form.collection_id && styles.artistChipTextActive]}>None</Text>
-              </TouchableOpacity>
+              </Pressable>
               {collections.map((c) => (
-                <TouchableOpacity key={c.id} style={[styles.artistChip, form.collection_id === c.id && styles.artistChipActive]}
+                <Pressable key={c.id} style={[styles.artistChip, form.collection_id === c.id && styles.artistChipActive]}
                   onPress={() => setForm({ ...form, collection_id: c.id })}>
                   <Text style={[styles.artistChipText, form.collection_id === c.id && styles.artistChipTextActive]}>
                     {c.title} ({c.collection_type})
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </ScrollView>
 
@@ -303,7 +303,7 @@ export default function SongDetailScreen() {
             <Text style={styles.label}>Status</Text>
             <View style={styles.statusRow}>
               {STATUS_OPTIONS.map((status) => (
-                <TouchableOpacity
+                <Pressable
                   key={status}
                   style={[
                     styles.statusChip,
@@ -321,7 +321,7 @@ export default function SongDetailScreen() {
                   >
                     {status.replace('_', ' ')}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
           </Card>
@@ -427,16 +427,16 @@ export default function SongDetailScreen() {
                   containerStyle={styles.tagInput}
                   onSubmitEditing={addTheme}
                 />
-                <TouchableOpacity style={styles.addTagBtn} onPress={addTheme}>
+                <Pressable style={styles.addTagBtn} onPress={addTheme}>
                   <Ionicons name="add" size={20} color={colors.text} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               <View style={styles.tagList}>
                 {form.themes.map((theme, i) => (
-                  <TouchableOpacity key={i} style={styles.tag} onPress={() => removeTheme(i)}>
+                  <Pressable key={i} style={styles.tag} onPress={() => removeTheme(i)}>
                     <Text style={styles.tagText}>{theme}</Text>
                     <Ionicons name="close" size={14} color={colors.textSecondary} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
               </View>
             </View>
@@ -446,12 +446,12 @@ export default function SongDetailScreen() {
             <Card style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Versions ({form.versions.length})</Text>
-                <TouchableOpacity
+                <Pressable
                   style={styles.addVersionBtn}
                   onPress={() => setShowVersionModal(true)}
                 >
                   <Ionicons name="add" size={20} color={colors.text} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
 
               {/* Assigned Version */}
@@ -468,14 +468,14 @@ export default function SongDetailScreen() {
                           <Text style={styles.versionBadgeText}>{version.version_label || version.version_type}</Text>
                         </View>
                         {version.suno_link ? <Text style={styles.versionLink} numberOfLines={1}>{version.suno_link}</Text> : null}
-                        <TouchableOpacity onPress={() => {
+                        <Pressable onPress={() => {
                           Alert.alert('Delete', 'Remove this version?', [
                             { text: 'Cancel', style: 'cancel' },
                             { text: 'Delete', style: 'destructive', onPress: () => deleteSongVersion(id!, version.id).then(loadSong) },
                           ]);
                         }}>
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                       {(version as any).suno_voice ? <Text style={styles.versionMeta}>Voice: {(version as any).suno_voice}</Text> : null}
                       {(version as any).style_prompt_used ? <Text style={styles.versionMeta}>Style: {(version as any).style_prompt_used}</Text> : null}
@@ -506,14 +506,14 @@ export default function SongDetailScreen() {
                             </Text>
                           </View>
                         )}
-                        <TouchableOpacity onPress={() => {
+                        <Pressable onPress={() => {
                           Alert.alert('Delete', 'Remove this version?', [
                             { text: 'Cancel', style: 'cancel' },
                             { text: 'Delete', style: 'destructive', onPress: () => deleteSongVersion(id!, version.id).then(loadSong) },
                           ]);
                         }}>
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
-                        </TouchableOpacity>
+                        </Pressable>
                       </View>
                       {version.suno_link ? <Text style={styles.versionLink} numberOfLines={1}>{version.suno_link}</Text> : null}
                       {version.notes ? <Text style={styles.versionNotes}>{version.notes}</Text> : null}
@@ -538,16 +538,16 @@ export default function SongDetailScreen() {
                 containerStyle={styles.tagInput}
                 onSubmitEditing={addTodo}
               />
-              <TouchableOpacity style={styles.addTagBtn} onPress={addTodo}>
+              <Pressable style={styles.addTagBtn} onPress={addTodo}>
                 <Ionicons name="add" size={20} color={colors.text} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
             {form.todo.map((item, i) => (
-              <TouchableOpacity key={i} style={styles.todoItem} onPress={() => removeTodo(i)}>
+              <Pressable key={i} style={styles.todoItem} onPress={() => removeTodo(i)}>
                 <Ionicons name="checkbox-outline" size={20} color={colors.warning} />
                 <Text style={styles.todoText}>{item}</Text>
                 <Ionicons name="close" size={16} color={colors.textMuted} />
-              </TouchableOpacity>
+              </Pressable>
             ))}
           </Card>
 
@@ -575,9 +575,9 @@ export default function SongDetailScreen() {
               <Card style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Suno Generations ({form.suno_generations?.length || 0})</Text>
-                  <TouchableOpacity style={styles.addVersionBtn} onPress={() => setShowSunoModal(true)}>
+                  <Pressable style={styles.addVersionBtn} onPress={() => setShowSunoModal(true)}>
                     <Ionicons name="add" size={20} color={colors.text} />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
                 {(form.suno_generations || []).map((gen: any, i: number) => (
                   <View key={gen.id || i} style={styles.sunoItem}>
@@ -585,14 +585,14 @@ export default function SongDetailScreen() {
                       <Ionicons name="link" size={16} color={colors.primary} />
                       <Text style={styles.sunoUrl} numberOfLines={1}>{gen.suno_url || 'No URL'}</Text>
                       {gen.is_favorite && <Ionicons name="star" size={16} color={colors.warning} />}
-                      <TouchableOpacity onPress={() => {
+                      <Pressable onPress={() => {
                         Alert.alert('Delete', 'Remove this generation?', [
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Delete', style: 'destructive', onPress: () => deleteSunoGeneration(id!, gen.id).then(loadSong) },
                         ]);
                       }}>
                         <Ionicons name="trash-outline" size={16} color={colors.error} />
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                     {gen.prompt_used ? <Text style={styles.sunoPrompt} numberOfLines={2}>Prompt: {gen.prompt_used}</Text> : null}
                     {gen.notes ? <Text style={styles.sunoNotes} numberOfLines={1}>{gen.notes}</Text> : null}
@@ -617,14 +617,14 @@ export default function SongDetailScreen() {
 
               {/* Quick Actions */}
               <View style={styles.actionRow}>
-                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/song/share/${id}`)}>
+                <Pressable style={styles.actionBtn} onPress={() => router.push(`/song/share/${id}`)}>
                   <Ionicons name="share-social" size={22} color={colors.text} />
                   <Text style={styles.actionText}>Share</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.secondary }]} onPress={() => router.push(`/song/distribution/${id}`)}>
+                </Pressable>
+                <Pressable style={[styles.actionBtn, { backgroundColor: colors.secondary }]} onPress={() => router.push(`/song/distribution/${id}`)}>
                   <Ionicons name="globe" size={22} color={colors.text} />
                   <Text style={styles.actionText}>Distribution</Text>
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </>
           )}
@@ -643,15 +643,15 @@ export default function SongDetailScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Version</Text>
-              <TouchableOpacity onPress={() => setShowVersionModal(false)}>
+              <Pressable onPress={() => setShowVersionModal(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
 
             <Text style={styles.label}>Version Type</Text>
             <View style={styles.versionTypeRow}>
               {VERSION_TYPES.map((type) => (
-                <TouchableOpacity
+                <Pressable
                   key={type}
                   style={[
                     styles.versionTypeChip,
@@ -667,7 +667,7 @@ export default function SongDetailScreen() {
                   >
                     {type}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </View>
 
@@ -678,7 +678,7 @@ export default function SongDetailScreen() {
               onChangeText={(text) => setNewVersion({ ...newVersion, version_label: text })}
             />
 
-            <TouchableOpacity
+            <Pressable
               style={[styles.assignToggle, newVersion.is_assigned && styles.assignToggleActive]}
               onPress={() => setNewVersion({ ...newVersion, is_assigned: !newVersion.is_assigned })}
             >
@@ -686,21 +686,21 @@ export default function SongDetailScreen() {
               <Text style={[styles.assignToggleText, newVersion.is_assigned && { color: colors.text }]}>
                 {newVersion.is_assigned ? 'Assigned (Primary)' : 'Alternate / Rendition'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
 
             {!newVersion.is_assigned && artists.length > 0 && (
               <>
                 <Text style={styles.label}>Link to Different Artist (optional)</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                  <TouchableOpacity style={[styles.versionTypeChip, !newVersion.assigned_artist_id && styles.versionTypeChipActive]}
+                  <Pressable style={[styles.versionTypeChip, !newVersion.assigned_artist_id && styles.versionTypeChipActive]}
                     onPress={() => setNewVersion({ ...newVersion, assigned_artist_id: null })}>
                     <Text style={[styles.versionTypeText, !newVersion.assigned_artist_id && styles.versionTypeTextActive]}>Same Artist</Text>
-                  </TouchableOpacity>
+                  </Pressable>
                   {artists.map(a => (
-                    <TouchableOpacity key={a.id} style={[styles.versionTypeChip, newVersion.assigned_artist_id === a.id && styles.versionTypeChipActive, { marginLeft: 8 }]}
+                    <Pressable key={a.id} style={[styles.versionTypeChip, newVersion.assigned_artist_id === a.id && styles.versionTypeChipActive, { marginLeft: 8 }]}
                       onPress={() => setNewVersion({ ...newVersion, assigned_artist_id: a.id })}>
                       <Text style={[styles.versionTypeText, newVersion.assigned_artist_id === a.id && styles.versionTypeTextActive]}>{a.name}</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </ScrollView>
               </>
@@ -790,16 +790,16 @@ function SunoGenModal({ visible, onClose, onSave }: { visible: boolean; onClose:
       <View style={sunoStyles.modalContent}>
         <View style={sunoStyles.modalHeader}>
           <Text style={sunoStyles.modalTitle}>Add Suno Generation</Text>
-          <TouchableOpacity onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></TouchableOpacity>
+          <Pressable onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></Pressable>
         </View>
         <Input label="Suno URL" placeholder="https://suno.com/song/..." value={sunoUrl} onChangeText={setSunoUrl} autoCapitalize="none" />
         <Input label="Prompt Used" placeholder="The style prompt used for generation" value={promptUsed} onChangeText={setPromptUsed} multiline />
         <Text style={sunoStyles.label}>Rating</Text>
         <View style={sunoStyles.ratingRow}>
           {[1,2,3,4,5].map(s => (
-            <TouchableOpacity key={s} onPress={() => setRating(s === rating ? 0 : s)}>
+            <Pressable key={s} onPress={() => setRating(s === rating ? 0 : s)}>
               <Ionicons name={s <= rating ? 'star' : 'star-outline'} size={28} color={colors.warning} />
-            </TouchableOpacity>
+            </Pressable>
           ))}
         </View>
         <Input label="Notes" placeholder="Notes about this generation..." value={notes} onChangeText={setNotes} multiline />

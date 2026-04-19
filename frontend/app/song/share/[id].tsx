@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator,
+  View, Text, StyleSheet, ScrollView, Pressable, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -62,9 +62,9 @@ export default function ShareScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
+        </Pressable>
         <Text style={styles.title}>Share Song</Text>
         <View style={styles.placeholder} />
       </View>
@@ -106,9 +106,9 @@ export default function ShareScreen() {
                       <View style={styles.fieldBlock}>
                         <View style={styles.fieldHeader}>
                           <Text style={styles.fieldLabel}>Title</Text>
-                          <TouchableOpacity onPress={() => copyToClipboard(format.title!, 'Title')}>
+                          <Pressable onPress={() => copyToClipboard(format.title!, 'Title')}>
                             <Ionicons name="copy-outline" size={16} color={colors.primary} />
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                         <Text style={styles.fieldText}>{format.title}</Text>
                       </View>
@@ -120,9 +120,9 @@ export default function ShareScreen() {
                           <Text style={styles.fieldLabel}>
                             {format.caption ? 'Caption' : format.tweet ? 'Tweet' : format.description ? 'Description' : 'Pitch'}
                           </Text>
-                          <TouchableOpacity onPress={() => copyToClipboard(mainText, 'Content')}>
+                          <Pressable onPress={() => copyToClipboard(mainText, 'Content')}>
                             <Ionicons name="copy-outline" size={16} color={colors.primary} />
-                          </TouchableOpacity>
+                          </Pressable>
                         </View>
                         <Text style={styles.fieldText}>{mainText}</Text>
                       </View>
@@ -148,13 +148,13 @@ export default function ShareScreen() {
                       </View>
                     ) : null}
 
-                    <TouchableOpacity style={styles.copyAllBtn} onPress={() => {
+                    <Pressable style={styles.copyAllBtn} onPress={() => {
                       const all = [format.title, mainText, format.notes].filter(Boolean).join('\n\n');
                       copyToClipboard(all, `All ${platform.label} content`);
                     }}>
                       <Ionicons name="copy" size={16} color={colors.text} />
                       <Text style={styles.copyAllText}>Copy All</Text>
-                    </TouchableOpacity>
+                    </Pressable>
                   </View>
                 )}
               </Card>
