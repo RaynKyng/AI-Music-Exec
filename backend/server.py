@@ -1287,7 +1287,26 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
     import csv
     import io
     
-    reader = csv.DictReader(io.StringIO(data.csv_text), delimiter=data.delimiter)
+    # Clean the input: strip BOM, normalize line endings
+    csv_text = data.csv_text.strip().replace('\r\n', '\n').replace('\r', '\n')
+    if csv_text.startswith('\ufeff'):
+        csv_text = csv_text[1:]
+    
+    reader = csv.DictReader(io.StringIO(csv_text), delimiter=data.delimiter)
+    
+    # Validate headers - must have at least a 'title' column (or similar)
+    headers = [h.strip().lower().replace(' ', '_') for h in (reader.fieldnames or [])]
+    title_cols = {'title', 'song_title', 'song', 'name'}
+    has_title_col = bool(title_cols.intersection(set(headers)))
+    
+    if not has_title_col:
+        return {
+            "imported": 0,
+            "errors": 1,
+            "songs": [],
+            "error_details": [{"row": 0, "error": f"No title column found. Found columns: {', '.join(headers[:10])}. Expected one of: title, song_title, song, name", "title": "HEADER ERROR"}],
+            "collections_created": [],
+        }
     
     # Pre-load artists and collections for name matching
     all_artists = await db.artists.find({"user_id": current_user["id"]}).to_list(1000)
@@ -1300,11 +1319,18 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
     created_collections = []
     
     imported = []
+    skipped = 0
     errors = []
     for i, row in enumerate(reader):
         try:
             # Normalize column names (lowercase, strip, underscores)
             row = {k.strip().lower().replace(' ', '_'): v.strip() for k, v in row.items() if k}
+            
+            # Get title - skip rows with no usable title
+            title = row.get("title", row.get("song_title", row.get("song", row.get("name", "")))).strip()
+            if not title or len(title) < 2:
+                skipped += 1
+                continue
             
             # Resolve artist by name or ID
             artist_id = data.artist_id  # default from modal picker
@@ -1383,7 +1409,7 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
             song_dict = {
                 "id": str(uuid.uuid4()),
                 "user_id": current_user["id"],
-                "title": row.get("title", row.get("song_title", row.get("song", row.get("name", f"Untitled {i+1}")))),
+                "title": title,
                 "artist_id": artist_id,
                 "featured_artist_ids": featured_ids,
                 "lyrics": row.get("lyrics", ""),
@@ -1422,6 +1448,7 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
     return {
         "imported": len(imported),
         "errors": len(errors),
+        "skipped": skipped,
         "songs": imported,
         "error_details": errors,
         "collections_created": created_collections,

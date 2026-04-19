@@ -232,7 +232,8 @@ export default function SongsScreen() {
                 <Ionicons name={importResult.errors > 0 ? 'warning' : 'checkmark-circle'} size={20} color={importResult.errors > 0 ? colors.warning : colors.success} />
                 <View style={styles.resultInfo}>
                   <Text style={styles.resultText}>{importResult.imported} songs imported</Text>
-                  {importResult.errors > 0 && <Text style={styles.resultError}>{importResult.errors} errors</Text>}
+                  {importResult.skipped > 0 && <Text style={styles.resultSkipped}>{importResult.skipped} rows skipped (no title)</Text>}
+                  {importResult.errors > 0 && <Text style={styles.resultError}>{importResult.errors} error{importResult.errors > 1 ? 's' : ''}: {importResult.error_details?.[0]?.error}</Text>}
                   {importResult.collections_created?.length > 0 && (
                     <Text style={styles.resultCollections}>
                       {importResult.collections_created.length} new release{importResult.collections_created.length > 1 ? 's' : ''} created: {importResult.collections_created.map((c: any) => c.title).join(', ')}
@@ -309,6 +310,7 @@ const styles = StyleSheet.create({
   resultInfo: { flex: 1 },
   resultText: { fontSize: 14, fontWeight: '600', color: colors.success },
   resultError: { fontSize: 12, color: colors.warning },
+  resultSkipped: { fontSize: 12, color: colors.textMuted },
   resultCollections: { fontSize: 12, color: colors.primary, marginTop: 2 },
   importBtn: { marginTop: spacing.xs },
 });
