@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -77,9 +77,9 @@ export default function ArtistsScreen() {
                   <Text style={styles.artistName}>{artist.name}</Text>
                   <Text style={styles.artistGenres}>{artist.genres.join(' \u2022 ') || 'No genres'}</Text>
                 </View>
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(artist)}>
+                <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(artist); }}>
                   <Ionicons name="trash-outline" size={20} color={colors.error} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
               {artist.unique_sound ? <Text style={styles.artistSound} numberOfLines={2}>{artist.unique_sound}</Text> : null}
               <View style={styles.artistFooter}>
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   artistInfo: { flex: 1, marginLeft: spacing.md },
   artistName: { fontSize: 18, fontWeight: '600', color: colors.text },
   artistGenres: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
-  deleteBtn: { padding: spacing.sm },
+  deleteBtn: { padding: spacing.sm, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   artistSound: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.md, fontStyle: 'italic' },
   artistFooter: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md },
   songCount: { flexDirection: 'row', alignItems: 'center', gap: 4 },

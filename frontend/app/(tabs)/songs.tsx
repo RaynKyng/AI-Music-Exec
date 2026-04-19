@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert,
-  Modal, KeyboardAvoidingView, Platform, TextInput,
+  Modal, KeyboardAvoidingView, Platform, TextInput, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -173,9 +173,9 @@ export default function SongsScreen() {
                 {song.versions?.length > 0 && <View style={styles.infoChip}><Ionicons name="layers" size={14} color={colors.textSecondary} /><Text style={styles.infoText}>{song.versions.length} ver</Text></View>}
                 {(song.suno_generations?.length > 0) && <View style={styles.infoChip}><Ionicons name="link" size={14} color={colors.primary} /><Text style={styles.infoText}>{song.suno_generations.length} gens</Text></View>}
                 {song.todo?.length > 0 && <View style={styles.infoChip}><Ionicons name="checkbox-outline" size={14} color={colors.warning} /><Text style={styles.infoText}>{song.todo.length} todos</Text></View>}
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(song)}>
+                <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(song); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
-                </TouchableOpacity>
+                </Pressable>
               </View>
             </Card>
           ))
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   songFooter: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.md },
   infoChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   infoText: { fontSize: 12, color: colors.textSecondary },
-  deleteBtn: { marginLeft: 'auto', padding: spacing.xs },
+  deleteBtn: { marginLeft: 'auto', padding: spacing.sm, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   // Modal
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: spacing.xxl, maxHeight: '90%' },
