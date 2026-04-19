@@ -50,18 +50,22 @@ export default function IdeaDetailScreen() {
   }, [id]);
 
   const loadIdea = async () => {
-    await fetchIdeas();
-    const idea = ideas.find(i => i.id === id);
-    if (idea) {
+    try {
+      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/ideas/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setLoading(false); return; }
+      const idea = await res.json();
       setForm({
         title: idea.title,
         content: idea.content,
         type: idea.type,
-        tags: idea.tags,
+        tags: idea.tags || [],
         linked_artist_id: idea.linked_artist_id,
         linked_song_id: idea.linked_song_id,
       });
-    }
+    } catch { /* ignore */ }
     setLoading(false);
   };
 

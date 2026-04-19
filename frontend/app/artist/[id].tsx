@@ -65,27 +65,31 @@ export default function ArtistDetailScreen() {
   }, [id]);
 
   const loadArtist = async () => {
-    await fetchArtists();
-    const artist = artists.find(a => a.id === id);
-    if (artist) {
+    try {
+      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/artists/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setLoading(false); return; }
+      const artist = await res.json();
       setForm({
         name: artist.name,
         bio: artist.bio,
         unique_sound: artist.unique_sound,
-        genres: artist.genres,
-        themes: artist.themes,
+        genres: artist.genres || [],
+        themes: artist.themes || [],
         tone: artist.tone,
-        patterns: artist.patterns,
-        branding: artist.branding,
-        image_url: artist.image_url,
+        patterns: artist.patterns || [],
+        branding: artist.branding || { color_palette: [], visual_style: '', aesthetic: '', mood_keywords: [] },
+        image_url: artist.image_url || '',
         profile_image: artist.profile_image || '',
         visual_brief: artist.visual_brief || '',
         visual_references: artist.visual_references || [],
-        suno_voice: (artist as any).suno_voice || '',
-        suno_exclusions: (artist as any).suno_exclusions || '',
-        notes: artist.notes,
+        suno_voice: artist.suno_voice || '',
+        suno_exclusions: artist.suno_exclusions || '',
+        notes: artist.notes || '',
       });
-    }
+    } catch { /* ignore */ }
     setLoading(false);
   };
 

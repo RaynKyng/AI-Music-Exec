@@ -93,31 +93,35 @@ export default function SongDetailScreen() {
   };
 
   const loadSong = async () => {
-    await fetchSongs();
-    const song = songs.find(s => s.id === id);
-    if (song) {
+    try {
+      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) { setLoading(false); return; }
+      const song = await res.json();
       setForm({
         title: song.title,
         artist_id: song.artist_id,
-        featured_artist_ids: (song as any).featured_artist_ids || [],
-        collection_id: (song as any).collection_id || null,
+        featured_artist_ids: song.featured_artist_ids || [],
+        collection_id: song.collection_id || null,
         lyrics: song.lyrics,
         style_prompt: song.style_prompt,
-        style_secondary: (song as any).style_secondary || '',
-        style_alternate: (song as any).style_alternate || '',
-        exclusions: (song as any).exclusions || '',
+        style_secondary: song.style_secondary || '',
+        style_alternate: song.style_alternate || '',
+        exclusions: song.exclusions || '',
         genre: song.genre,
         mood: song.mood,
         tempo: song.tempo,
-        themes: song.themes,
+        themes: song.themes || [],
         status: song.status,
         notes: song.notes,
-        todo: song.todo,
-        versions: song.versions,
+        todo: song.todo || [],
+        versions: song.versions || [],
         suno_generations: song.suno_generations || [],
-        track_number: (song as any).track_number || 0,
+        track_number: song.track_number || 0,
       });
-    }
+    } catch { /* ignore */ }
     setLoading(false);
   };
 
