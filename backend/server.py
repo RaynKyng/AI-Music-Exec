@@ -142,10 +142,12 @@ class Comment(CommentCreate):
 
 class SongCreate(BaseModel):
     title: str
-    artist_id: Optional[str] = None
+    artist_id: Optional[str] = None  # primary artist
+    featured_artist_ids: List[str] = []  # featured/collaborating artists
     collection_id: Optional[str] = None  # EP/LP it belongs to
     lyrics: str = ""
     style_prompt: str = ""  # Suno-formatted
+    exclusions: str = ""  # song exclusions prompt
     genre: str = ""
     mood: str = ""
     tempo: str = ""
@@ -1343,6 +1345,19 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
                     collection_map[album_name_raw.lower()] = collection_id
                     created_collections.append({"title": album_name_raw, "id": collection_id})
             
+            # Resolve featured artists by name
+            featured_ids = []
+            featured_raw = row.get("featured", row.get("featured_artists", row.get("feat", row.get("features", ""))))
+            if featured_raw:
+                for feat_name in featured_raw.split(";"):
+                    feat_name = feat_name.strip()
+                    if not feat_name:
+                        continue
+                    matched = artist_map.get(feat_name.lower())
+                    if matched:
+                        featured_ids.append(matched)
+                    # If no match, skip silently (artist may not exist yet)
+            
             # Build suno_generations from suno_link column
             suno_gens = []
             suno_link_raw = row.get("suno_link", row.get("suno_url", row.get("suno", "")))
@@ -1368,6 +1383,7 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
                 "user_id": current_user["id"],
                 "title": row.get("title", row.get("song_title", row.get("song", row.get("name", f"Untitled {i+1}")))),
                 "artist_id": artist_id,
+                "featured_artist_ids": featured_ids,
                 "lyrics": row.get("lyrics", ""),
                 "style_prompt": row.get("style_prompt", row.get("style", row.get("suno_style", ""))),
                 "genre": row.get("genre", ""),

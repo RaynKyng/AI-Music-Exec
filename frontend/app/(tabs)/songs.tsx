@@ -154,7 +154,12 @@ export default function SongsScreen() {
               <View style={styles.songHeader}>
                 <View style={styles.songInfo}>
                   <Text style={styles.songTitle}>{song.title}</Text>
-                  <Text style={styles.artistName}>{getArtistName(song.artist_id)}</Text>
+                  <Text style={styles.artistName}>
+                    {getArtistName(song.artist_id)}
+                    {(song as any).featured_artist_ids?.length > 0 && (
+                      ` ft. ${(song as any).featured_artist_ids.map((id: string) => getArtistName(id)).join(', ')}`
+                    )}
+                  </Text>
                 </View>
                 <StatusBadge status={song.status} />
               </View>
@@ -192,7 +197,7 @@ export default function SongsScreen() {
 
             <View style={styles.csvExample}>
               <Text style={styles.csvExampleTitle}>Column headers (use any/all):</Text>
-              <Text style={styles.csvExampleText}>title, artist, album, genre, mood,{'\n'}style_prompt, suno_link, status,{'\n'}tempo, themes, lyrics, track, notes</Text>
+              <Text style={styles.csvExampleText}>title, artist, featured, album,{'\n'}genre, mood, style_prompt, exclusions,{'\n'}suno_link, status, tempo, themes,{'\n'}track, lyrics, notes</Text>
             </View>
 
             <TextInput

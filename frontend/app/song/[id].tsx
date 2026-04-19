@@ -38,9 +38,11 @@ export default function SongDetailScreen() {
   const [form, setForm] = useState({
     title: '',
     artist_id: null as string | null,
+    featured_artist_ids: [] as string[],
     collection_id: null as string | null,
     lyrics: '',
     style_prompt: '',
+    exclusions: '',
     genre: '',
     mood: '',
     tempo: '',
@@ -95,9 +97,11 @@ export default function SongDetailScreen() {
       setForm({
         title: song.title,
         artist_id: song.artist_id,
+        featured_artist_ids: (song as any).featured_artist_ids || [],
         collection_id: (song as any).collection_id || null,
         lyrics: song.lyrics,
         style_prompt: song.style_prompt,
+        exclusions: (song as any).exclusions || '',
         genre: song.genre,
         mood: song.mood,
         tempo: song.tempo,
@@ -242,6 +246,32 @@ export default function SongDetailScreen() {
               ))}
             </ScrollView>
 
+            {/* Featured Artists */}
+            <Text style={styles.label}>Featured Artists</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
+              {artists.filter(a => a.id !== form.artist_id).map((artist) => {
+                const isFeatured = form.featured_artist_ids.includes(artist.id);
+                return (
+                  <TouchableOpacity key={artist.id}
+                    style={[styles.artistChip, isFeatured && { backgroundColor: colors.warning }]}
+                    onPress={() => {
+                      if (isFeatured) {
+                        setForm({ ...form, featured_artist_ids: form.featured_artist_ids.filter(id => id !== artist.id) });
+                      } else {
+                        setForm({ ...form, featured_artist_ids: [...form.featured_artist_ids, artist.id] });
+                      }
+                    }}>
+                    <Text style={[styles.artistChipText, isFeatured && styles.artistChipTextActive]}>{artist.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            {form.featured_artist_ids.length > 0 && (
+              <Text style={styles.featLabel}>
+                ft. {form.featured_artist_ids.map(id => artists.find(a => a.id === id)?.name).filter(Boolean).join(', ')}
+              </Text>
+            )}
+
             <Text style={styles.label}>Status</Text>
 
             {/* Collection picker */}
@@ -313,6 +343,14 @@ export default function SongDetailScreen() {
               onChangeText={(text) => setForm({ ...form, style_prompt: text })}
               multiline
               numberOfLines={3}
+            />
+            <Input
+              label="Exclusions Prompt"
+              placeholder="What to exclude (e.g., no autotune, no trap beats...)"
+              value={form.exclusions}
+              onChangeText={(text) => setForm({ ...form, exclusions: text })}
+              multiline
+              numberOfLines={2}
             />
             <View style={styles.row}>
               <Input
@@ -812,6 +850,13 @@ const styles = StyleSheet.create({
   },
   artistChipTextActive: {
     color: colors.text,
+  },
+  featLabel: {
+    fontSize: 13,
+    color: colors.warning,
+    fontWeight: '500',
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
   },
   statusRow: {
     flexDirection: 'row',
