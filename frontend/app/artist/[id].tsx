@@ -409,6 +409,14 @@ export default function ArtistDetailScreen() {
           </Card>
 
           {!isNew && (
+            <TouchableOpacity style={styles.briefBtn} onPress={() => router.push(`/artist/brief/${id}`)}>
+              <Ionicons name="document-text" size={20} color={colors.text} />
+              <Text style={styles.briefBtnText}>View Artist Brief</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </TouchableOpacity>
+          )}
+
+          {!isNew && (
             <Card style={styles.section}>
               <CollabComments targetType="artist" targetId={id!} />
             </Card>
@@ -560,5 +568,22 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.md,
     fontStyle: 'italic',
+  },
+  briefBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    gap: spacing.sm,
+  },
+  briefBtnText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
   },
 });
