@@ -146,7 +146,9 @@ class SongCreate(BaseModel):
     featured_artist_ids: List[str] = []  # featured/collaborating artists
     collection_id: Optional[str] = None  # EP/LP it belongs to
     lyrics: str = ""
-    style_prompt: str = ""  # Suno-formatted
+    style_prompt: str = ""  # primary style (Suno-formatted)
+    style_secondary: str = ""  # secondary style option
+    style_alternate: str = ""  # alternative style option
     exclusions: str = ""  # song exclusions prompt
     genre: str = ""
     mood: str = ""
@@ -1385,7 +1387,9 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
                 "artist_id": artist_id,
                 "featured_artist_ids": featured_ids,
                 "lyrics": row.get("lyrics", ""),
-                "style_prompt": row.get("style_prompt", row.get("style", row.get("suno_style", ""))),
+                "style_prompt": row.get("style_prompt", row.get("style", row.get("suno_style", row.get("primary_style", "")))),
+                "style_secondary": row.get("style_secondary", row.get("secondary_style", "")),
+                "style_alternate": row.get("style_alternate", row.get("alternative_style", row.get("alt_style", ""))),
                 "genre": row.get("genre", ""),
                 "mood": row.get("mood", row.get("vibe", "")),
                 "tempo": row.get("tempo", row.get("bpm", "")),

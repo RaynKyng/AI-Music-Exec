@@ -42,6 +42,8 @@ export default function SongDetailScreen() {
     collection_id: null as string | null,
     lyrics: '',
     style_prompt: '',
+    style_secondary: '',
+    style_alternate: '',
     exclusions: '',
     genre: '',
     mood: '',
@@ -101,6 +103,8 @@ export default function SongDetailScreen() {
         collection_id: (song as any).collection_id || null,
         lyrics: song.lyrics,
         style_prompt: song.style_prompt,
+        style_secondary: (song as any).style_secondary || '',
+        style_alternate: (song as any).style_alternate || '',
         exclusions: (song as any).exclusions || '',
         genre: song.genre,
         mood: song.mood,
@@ -335,15 +339,49 @@ export default function SongDetailScreen() {
           </Card>
 
           <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Style & Metadata</Text>
-            <Input
-              label="Style Prompt (Suno Format)"
-              placeholder="Genre, mood, instrumentation..."
-              value={form.style_prompt}
-              onChangeText={(text) => setForm({ ...form, style_prompt: text })}
-              multiline
-              numberOfLines={3}
-            />
+            <Text style={styles.sectionTitle}>Song Styles</Text>
+            <View style={styles.styleCard}>
+              <View style={styles.styleHeader}>
+                <View style={[styles.styleBadge, { backgroundColor: colors.primary }]}>
+                  <Text style={styles.styleBadgeText}>PRIMARY</Text>
+                </View>
+              </View>
+              <Input
+                placeholder="Primary style prompt for Suno..."
+                value={form.style_prompt}
+                onChangeText={(text) => setForm({ ...form, style_prompt: text })}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+            <View style={styles.styleCard}>
+              <View style={styles.styleHeader}>
+                <View style={[styles.styleBadge, { backgroundColor: colors.secondary }]}>
+                  <Text style={styles.styleBadgeText}>SECONDARY</Text>
+                </View>
+              </View>
+              <Input
+                placeholder="Secondary style direction..."
+                value={form.style_secondary}
+                onChangeText={(text) => setForm({ ...form, style_secondary: text })}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+            <View style={styles.styleCard}>
+              <View style={styles.styleHeader}>
+                <View style={[styles.styleBadge, { backgroundColor: colors.warning }]}>
+                  <Text style={styles.styleBadgeText}>ALTERNATIVE</Text>
+                </View>
+              </View>
+              <Input
+                placeholder="Alternative style option..."
+                value={form.style_alternate}
+                onChangeText={(text) => setForm({ ...form, style_alternate: text })}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
             <Input
               label="Exclusions Prompt"
               placeholder="What to exclude (e.g., no autotune, no trap beats...)"
@@ -352,6 +390,10 @@ export default function SongDetailScreen() {
               multiline
               numberOfLines={2}
             />
+          </Card>
+
+          <Card style={styles.section}>
+            <Text style={styles.sectionTitle}>Metadata</Text>
             <View style={styles.row}>
               <Input
                 label="Genre"
@@ -881,6 +923,27 @@ const styles = StyleSheet.create({
   },
   lyricsInput: {
     minHeight: 200,
+  },
+  styleCard: {
+    backgroundColor: colors.surfaceLight,
+    borderRadius: 12,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  styleHeader: {
+    marginBottom: spacing.xs,
+  },
+  styleBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  styleBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 0.5,
   },
   row: {
     flexDirection: 'row',

@@ -197,7 +197,7 @@ export default function SongsScreen() {
 
             <View style={styles.csvExample}>
               <Text style={styles.csvExampleTitle}>Column headers (use any/all):</Text>
-              <Text style={styles.csvExampleText}>title, artist, featured, album,{'\n'}genre, mood, style_prompt, exclusions,{'\n'}suno_link, status, tempo, themes,{'\n'}track, lyrics, notes</Text>
+              <Text style={styles.csvExampleText}>title, artist, featured, album,{'\n'}genre, mood, style_prompt,{'\n'}style_secondary, style_alternate,{'\n'}exclusions, suno_link, status,{'\n'}tempo, themes, track, lyrics, notes</Text>
             </View>
 
             <TextInput
