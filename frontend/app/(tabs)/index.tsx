@@ -36,7 +36,7 @@ export default function Dashboard() {
 
   const handleLogout = async () => {
     await logout();
-    // _layout.tsx handles navigation based on auth state
+    router.replace('/');
   };
   const onRefresh = () => { fetchStats(); loadRevenue(); };
 
