@@ -1292,19 +1292,53 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
     if csv_text.startswith('\ufeff'):
         csv_text = csv_text[1:]
     
-    reader = csv.DictReader(io.StringIO(csv_text), delimiter=data.delimiter)
+    # Auto-detect delimiter: if tabs found in first line, use tab
+    first_line = csv_text.split('\n')[0] if '\n' in csv_text else csv_text
+    delimiter = '\t' if '\t' in first_line else data.delimiter
     
-    # Validate headers - must have at least a 'title' column (or similar)
-    headers = [h.strip().lower().replace(' ', '_') for h in (reader.fieldnames or [])]
-    title_cols = {'title', 'song_title', 'song', 'name'}
-    has_title_col = bool(title_cols.intersection(set(headers)))
+    reader = csv.DictReader(io.StringIO(csv_text), delimiter=delimiter)
     
-    if not has_title_col:
+    # Normalize headers aggressively: lowercase, strip all whitespace, replace spaces with _
+    raw_headers = reader.fieldnames or []
+    clean_headers = [h.strip().lower().replace(' ', '_').rstrip('_') for h in raw_headers]
+    
+    # Column name aliases mapping
+    col_aliases = {
+        'primary_style': 'style_prompt',
+        'secondary_style': 'style_secondary', 
+        'alternative_style': 'style_alternate',
+        'alt_style': 'style_alternate',
+        'song_title': 'title',
+        'song': 'title',
+        'name': 'title',
+        'vibe': 'mood',
+        'bpm': 'tempo',
+        'tags': 'themes',
+        'suno_url': 'suno_link',
+        'suno': 'suno_link',
+        'feat': 'featured',
+        'features': 'featured',
+        'featured_artists': 'featured',
+        'project': 'album',
+        'collection': 'album',
+        'ep': 'album',
+        'playlist': 'album',
+        'exclusions_prompt': 'exclusions',
+        'song_exclusions': 'exclusions',
+        'track_number': 'track',
+        'track_#': 'track',
+    }
+    
+    # Check for title column
+    title_found = any(h in {'title', 'song_title', 'song', 'name'} for h in clean_headers)
+    
+    if not title_found:
         return {
             "imported": 0,
             "errors": 1,
+            "skipped": 0,
             "songs": [],
-            "error_details": [{"row": 0, "error": f"No title column found. Found columns: {', '.join(headers[:10])}. Expected one of: title, song_title, song, name", "title": "HEADER ERROR"}],
+            "error_details": [{"row": 0, "error": f"No title column found. Found columns: {', '.join(clean_headers[:15])}. Expected one of: title, song_title, song, name", "title": "HEADER ERROR"}],
             "collections_created": [],
         }
     
@@ -1323,11 +1357,18 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
     errors = []
     for i, row in enumerate(reader):
         try:
-            # Normalize column names (lowercase, strip, underscores)
-            row = {k.strip().lower().replace(' ', '_'): v.strip() for k, v in row.items() if k}
+            # Normalize column names and apply aliases
+            normalized = {}
+            for k, v in row.items():
+                if not k:
+                    continue
+                clean_key = k.strip().lower().replace(' ', '_').rstrip('_')
+                clean_key = col_aliases.get(clean_key, clean_key)  # apply alias
+                normalized[clean_key] = (v or '').strip()
+            row = normalized
             
             # Get title - skip rows with no usable title
-            title = row.get("title", row.get("song_title", row.get("song", row.get("name", "")))).strip()
+            title = row.get("title", "").strip()
             if not title or len(title) < 2:
                 skipped += 1
                 continue
