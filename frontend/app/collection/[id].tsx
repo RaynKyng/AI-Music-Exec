@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Alert,
   KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDataStore } from '../../src/stores/dataStore';
@@ -42,6 +42,13 @@ export default function CollectionDetailScreen() {
     fetchArtists();
     if (!isNew && id) loadCollection();
   }, [id]);
+
+  // Reload tracklist when screen regains focus (after editing a song's track number)
+  useFocusEffect(
+    useCallback(() => {
+      if (!isNew && id) loadCollection();
+    }, [id, isNew])
+  );
 
   const loadCollection = async () => {
     try {
