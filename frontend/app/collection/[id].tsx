@@ -67,6 +67,30 @@ export default function CollectionDetailScreen() {
     finally { setLoading(false); }
   };
 
+  const reorderTrack = async (songId: string, swapSongId: string, newPos: number, oldPos: number) => {
+    // Swap track_number between the two songs
+    const newTracks = [...tracks];
+    const temp = newTracks[oldPos];
+    newTracks[oldPos] = newTracks[newPos];
+    newTracks[newPos] = temp;
+    setTracks(newTracks);
+
+    // Update both songs on backend with new track numbers (1-indexed)
+    try {
+      await Promise.all([
+        authFetch(`${API_URL}/api/songs/${songId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ ...newTracks[newPos], track_number: newPos + 1 }),
+        }),
+        authFetch(`${API_URL}/api/songs/${swapSongId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ ...newTracks[oldPos], track_number: oldPos + 1 }),
+        }),
+      ]);
+    } catch { /* reload to get correct state */ }
+    await loadCollection();
+  };
+
   const handleSave = async () => {
     if (!form.title.trim()) { Alert.alert('Error', 'Title required'); return; }
     setSaving(true);
@@ -176,7 +200,23 @@ export default function CollectionDetailScreen() {
                 tracks.map((song, i) => (
                   <Pressable key={song.id} style={styles.trackRow}
                     onPress={() => router.push(`/song/${song.id}`)}>
-                    <Text style={styles.trackNum}>{song.track_number || i + 1}</Text>
+                    <View style={styles.trackReorder}>
+                      <Pressable style={styles.reorderBtn} onPress={async (e) => {
+                        e.stopPropagation();
+                        if (i === 0) return;
+                        await reorderTrack(song.id, tracks[i - 1]?.id, i - 1, i);
+                      }}>
+                        <Ionicons name="chevron-up" size={18} color={i === 0 ? colors.border : colors.textSecondary} />
+                      </Pressable>
+                      <Text style={styles.trackNum}>{i + 1}</Text>
+                      <Pressable style={styles.reorderBtn} onPress={async (e) => {
+                        e.stopPropagation();
+                        if (i === tracks.length - 1) return;
+                        await reorderTrack(song.id, tracks[i + 1]?.id, i + 1, i);
+                      }}>
+                        <Ionicons name="chevron-down" size={18} color={i === tracks.length - 1 ? colors.border : colors.textSecondary} />
+                      </Pressable>
+                    </View>
                     <View style={styles.trackInfo}>
                       <Text style={styles.trackTitle}>{song.title}</Text>
                       {song.style_prompt ? (
@@ -243,7 +283,9 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.text },
   emptyTracks: { fontSize: 14, color: colors.textMuted, fontStyle: 'italic', textAlign: 'center', paddingVertical: spacing.lg },
   trackRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm },
-  trackNum: { width: 28, fontSize: 16, fontWeight: '700', color: colors.textMuted, textAlign: 'center' },
+  trackReorder: { alignItems: 'center', width: 32 },
+  reorderBtn: { padding: 2, minHeight: 24, justifyContent: 'center', alignItems: 'center' },
+  trackNum: { fontSize: 14, fontWeight: '700', color: colors.textMuted, textAlign: 'center' },
   trackInfo: { flex: 1 },
   trackTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
   trackStyle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
