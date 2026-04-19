@@ -31,8 +31,18 @@ export default function SongsScreen() {
   const [csvArtist, setCsvArtist] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
+  const [collections, setCollections] = useState<any[]>([]);
 
-  useEffect(() => { fetchSongs(); fetchArtists(); }, []);
+  useEffect(() => { fetchSongs(); fetchArtists(); loadCollections(); }, []);
+
+  const loadCollections = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/collections`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      setCollections(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -169,7 +179,8 @@ export default function SongsScreen() {
                 <View style={styles.albumRow}>
                   <Ionicons name="albums" size={12} color={colors.primary} />
                   <Text style={styles.albumText}>
-                    {(song as any).track_number ? `Track ${(song as any).track_number} \u2022 ` : ''}Album assigned
+                    {(song as any).track_number ? `Track ${(song as any).track_number} \u2022 ` : ''}
+                    {collections.find(c => c.id === (song as any).collection_id)?.title || 'Unknown Release'}
                   </Text>
                 </View>
               )}
