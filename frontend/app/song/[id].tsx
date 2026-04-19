@@ -38,6 +38,7 @@ export default function SongDetailScreen() {
   const [form, setForm] = useState({
     title: '',
     artist_id: null as string | null,
+    collection_id: null as string | null,
     lyrics: '',
     style_prompt: '',
     genre: '',
@@ -49,8 +50,10 @@ export default function SongDetailScreen() {
     todo: [] as string[],
     versions: [] as Song['versions'],
     suno_generations: [] as any[],
+    track_number: 0,
   });
   
+  const [collections, setCollections] = useState<any[]>([]);
   const [themeInput, setThemeInput] = useState('');
   const [todoInput, setTodoInput] = useState('');
   const [newVersion, setNewVersion] = useState({
@@ -60,15 +63,30 @@ export default function SongDetailScreen() {
     assigned_artist_id: null as string | null,
     audio_url: '',
     suno_link: '',
+    suno_voice: '',
+    exclusions_prompt: '',
+    style_prompt_used: '',
     notes: '',
   });
 
   useEffect(() => {
     fetchArtists();
+    loadCollections();
     if (!isNew && id) {
       loadSong();
     }
   }, [id]);
+
+  const loadCollections = async () => {
+    try {
+      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/collections`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setCollections(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+  };
 
   const loadSong = async () => {
     await fetchSongs();
@@ -77,6 +95,7 @@ export default function SongDetailScreen() {
       setForm({
         title: song.title,
         artist_id: song.artist_id,
+        collection_id: (song as any).collection_id || null,
         lyrics: song.lyrics,
         style_prompt: song.style_prompt,
         genre: song.genre,
@@ -88,6 +107,7 @@ export default function SongDetailScreen() {
         todo: song.todo,
         versions: song.versions,
         suno_generations: song.suno_generations || [],
+        track_number: (song as any).track_number || 0,
       });
     }
     setLoading(false);
@@ -223,6 +243,30 @@ export default function SongDetailScreen() {
             </ScrollView>
 
             <Text style={styles.label}>Status</Text>
+
+            {/* Collection picker */}
+            <Text style={styles.label}>Release / Project</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
+              <TouchableOpacity style={[styles.artistChip, !form.collection_id && styles.artistChipActive]}
+                onPress={() => setForm({ ...form, collection_id: null })}>
+                <Text style={[styles.artistChipText, !form.collection_id && styles.artistChipTextActive]}>None</Text>
+              </TouchableOpacity>
+              {collections.map((c) => (
+                <TouchableOpacity key={c.id} style={[styles.artistChip, form.collection_id === c.id && styles.artistChipActive]}
+                  onPress={() => setForm({ ...form, collection_id: c.id })}>
+                  <Text style={[styles.artistChipText, form.collection_id === c.id && styles.artistChipTextActive]}>
+                    {c.title} ({c.collection_type})
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {form.collection_id && (
+              <Input label="Track Number" placeholder="e.g., 1, 2, 3..." value={String(form.track_number || '')}
+                onChangeText={(t) => setForm({ ...form, track_number: parseInt(t) || 0 })} keyboardType="numeric" />
+            )}
+
+            <Text style={styles.label}>Status</Text>
             <View style={styles.statusRow}>
               {STATUS_OPTIONS.map((status) => (
                 <TouchableOpacity
@@ -353,6 +397,8 @@ export default function SongDetailScreen() {
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
                         </TouchableOpacity>
                       </View>
+                      {(version as any).suno_voice ? <Text style={styles.versionMeta}>Voice: {(version as any).suno_voice}</Text> : null}
+                      {(version as any).style_prompt_used ? <Text style={styles.versionMeta}>Style: {(version as any).style_prompt_used}</Text> : null}
                       {version.notes ? <Text style={styles.versionNotes}>{version.notes}</Text> : null}
                     </View>
                   ))}
@@ -585,6 +631,25 @@ export default function SongDetailScreen() {
               placeholder="https://suno.com/..."
               value={newVersion.suno_link}
               onChangeText={(text) => setNewVersion({ ...newVersion, suno_link: text })}
+            />
+            <Input
+              label="Suno Voice Used"
+              placeholder="e.g., Voice ID or name saved in Suno"
+              value={newVersion.suno_voice}
+              onChangeText={(text) => setNewVersion({ ...newVersion, suno_voice: text })}
+            />
+            <Input
+              label="Style Prompt Used"
+              placeholder="Which style was used? (primary, secondary, alt)"
+              value={newVersion.style_prompt_used}
+              onChangeText={(text) => setNewVersion({ ...newVersion, style_prompt_used: text })}
+            />
+            <Input
+              label="Exclusions Prompt"
+              placeholder="What was excluded from generation?"
+              value={newVersion.exclusions_prompt}
+              onChangeText={(text) => setNewVersion({ ...newVersion, exclusions_prompt: text })}
+              multiline
             />
             <Input
               label="Audio URL (optional)"
@@ -885,6 +950,11 @@ const styles = StyleSheet.create({
   versionLink: {
     fontSize: 12,
     color: colors.primary,
+  },
+  versionMeta: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   versionNotes: {
     fontSize: 12,

@@ -48,6 +48,8 @@ export default function ArtistDetailScreen() {
     profile_image: '',
     visual_brief: '',
     visual_references: [] as string[],
+    suno_voice: '',
+    suno_exclusions: '',
     notes: '',
   });
   
@@ -79,6 +81,8 @@ export default function ArtistDetailScreen() {
         profile_image: artist.profile_image || '',
         visual_brief: artist.visual_brief || '',
         visual_references: artist.visual_references || [],
+        suno_voice: (artist as any).suno_voice || '',
+        suno_exclusions: (artist as any).suno_exclusions || '',
         notes: artist.notes,
       });
     }
@@ -239,6 +243,21 @@ export default function ArtistDetailScreen() {
               placeholder="e.g., Dark, uplifting, introspective"
               value={form.tone}
               onChangeText={(text) => setForm({ ...form, tone: text })}
+            />
+
+            <Input
+              label="Suno Voice"
+              placeholder="Saved voice ID or name for this artist"
+              value={form.suno_voice}
+              onChangeText={(text) => setForm({ ...form, suno_voice: text })}
+            />
+            <Input
+              label="Default Exclusions Prompt"
+              placeholder="What to exclude from generations (e.g., no autotune, no trap beats...)"
+              value={form.suno_exclusions}
+              onChangeText={(text) => setForm({ ...form, suno_exclusions: text })}
+              multiline
+              numberOfLines={2}
             />
 
             <View style={styles.tagSection}>

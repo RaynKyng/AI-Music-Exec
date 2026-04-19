@@ -89,6 +89,8 @@ class ArtistCreate(BaseModel):
     profile_image: str = ""  # base64 encoded image
     visual_brief: str = ""  # shareable visual identity description
     visual_references: List[str] = []  # reference image URLs
+    suno_voice: str = ""  # saved Suno voice ID/name for this artist
+    suno_exclusions: str = ""  # default exclusions prompt for this artist
     notes: str = ""
 
 class Artist(ArtistCreate):
@@ -118,6 +120,9 @@ class SongVersion(BaseModel):
     assigned_artist_id: Optional[str] = None  # alternate can be linked to different artist
     audio_url: str = ""
     suno_link: str = ""
+    suno_voice: str = ""  # which Suno voice was used
+    exclusions_prompt: str = ""  # song exclusions prompt used
+    style_prompt_used: str = ""  # which style (primary/secondary/alt) was used
     suno_generations: List[SunoGeneration] = []
     notes: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)

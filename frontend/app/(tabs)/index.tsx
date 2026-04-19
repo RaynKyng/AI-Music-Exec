@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity,
+  View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -34,7 +34,10 @@ export default function Dashboard() {
     } catch { /* ignore */ }
   };
 
-  const handleLogout = async () => { await logout(); router.replace('/'); };
+  const handleLogout = async () => {
+    await logout();
+    // _layout.tsx handles navigation based on auth state
+  };
   const onRefresh = () => { fetchStats(); loadRevenue(); };
 
   const maxPlatformAmount = revenue?.by_platform?.length > 0 
@@ -53,9 +56,12 @@ export default function Dashboard() {
           <Text style={styles.greeting}>Welcome back,</Text>
           <Text style={styles.userName}>{user?.name || 'Music Executive'}</Text>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-          <Ionicons name="log-out-outline" size={24} color={colors.textSecondary} />
-        </TouchableOpacity>
+        <Pressable testID="logout-btn" onPress={handleLogout} style={styles.logoutBtn}>
+          <View style={styles.logoutInner}>
+            <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
+            <Text style={styles.logoutText}>Sign Out</Text>
+          </View>
+        </Pressable>
       </View>
 
       <ScrollView style={styles.scroll}
@@ -220,7 +226,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   greeting: { fontSize: 14, color: colors.textSecondary },
   userName: { fontSize: 24, fontWeight: '700', color: colors.text },
-  logoutBtn: { padding: spacing.sm },
+  logoutBtn: { padding: spacing.sm, backgroundColor: colors.surfaceLight, borderRadius: 8, minWidth: 100, minHeight: 44 },
+  logoutInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.sm },
+  logoutText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
   scroll: { flex: 1, paddingHorizontal: spacing.lg },
   statsGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
   statCard: { flex: 1, alignItems: 'center', padding: spacing.md },

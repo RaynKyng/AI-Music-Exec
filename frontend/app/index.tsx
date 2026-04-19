@@ -29,10 +29,8 @@ export default function Index() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && isAuthenticated) {
-      router.replace('/(tabs)');
-    }
-  }, [isLoading, isAuthenticated]);
+    // Navigation handled by _layout.tsx
+  }, []);
 
   const handleSubmit = async () => {
     if (!email || !password || (!isLogin && !name)) {
@@ -47,7 +45,7 @@ export default function Index() {
       } else {
         await register(email, password, name);
       }
-      router.replace('/(tabs)');
+      // Navigation handled automatically by _layout.tsx
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Authentication failed');
     } finally {

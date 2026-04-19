@@ -9,6 +9,7 @@ interface AuthState {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  didLogout: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -20,6 +21,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   token: null,
   isLoading: true,
   isAuthenticated: false,
+  didLogout: false,
 
   login: async (email: string, password: string) => {
     const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -37,7 +39,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await AsyncStorage.setItem('token', data.access_token);
     await AsyncStorage.setItem('user', JSON.stringify(data.user));
     
-    set({ user: data.user, token: data.access_token, isAuthenticated: true });
+    set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
   },
 
   register: async (email: string, password: string, name: string) => {
@@ -56,16 +58,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await AsyncStorage.setItem('token', data.access_token);
     await AsyncStorage.setItem('user', JSON.stringify(data.user));
     
-    set({ user: data.user, token: data.access_token, isAuthenticated: true });
+    set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
   },
 
   logout: async () => {
-    await AsyncStorage.removeItem('token');
-    await AsyncStorage.removeItem('user');
-    set({ user: null, token: null, isAuthenticated: false });
+    await AsyncStorage.multiRemove(['token', 'user']);
+    set({ user: null, token: null, isAuthenticated: false, didLogout: true });
   },
 
   loadAuth: async () => {
+    // Don't reload if user just logged out
+    if (get().didLogout) {
+      set({ isLoading: false });
+      return;
+    }
     try {
       const token = await AsyncStorage.getItem('token');
       const userStr = await AsyncStorage.getItem('user');
@@ -81,3 +87,4 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 }));
+
