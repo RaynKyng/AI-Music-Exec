@@ -187,12 +187,12 @@ export default function SongsScreen() {
             </View>
 
             <Text style={styles.modalDesc}>
-              Paste CSV from Google Sheets. Use columns: title, genre, mood, style_prompt, status, lyrics, tempo, themes
+              Paste CSV from Google Sheets. Only title is required — everything else is optional and defaults to draft.
             </Text>
 
             <View style={styles.csvExample}>
-              <Text style={styles.csvExampleTitle}>Example format:</Text>
-              <Text style={styles.csvExampleText}>title,genre,mood,status{'\n'}My Song,Lo-fi,Chill,draft{'\n'}Another,Pop,Upbeat,final</Text>
+              <Text style={styles.csvExampleTitle}>Column headers (use any/all):</Text>
+              <Text style={styles.csvExampleText}>title, artist, album, genre, mood,{'\n'}style_prompt, suno_link, status,{'\n'}tempo, themes, lyrics, track, notes</Text>
             </View>
 
             <TextInput
@@ -228,6 +228,11 @@ export default function SongsScreen() {
                 <View style={styles.resultInfo}>
                   <Text style={styles.resultText}>{importResult.imported} songs imported</Text>
                   {importResult.errors > 0 && <Text style={styles.resultError}>{importResult.errors} errors</Text>}
+                  {importResult.collections_created?.length > 0 && (
+                    <Text style={styles.resultCollections}>
+                      {importResult.collections_created.length} new release{importResult.collections_created.length > 1 ? 's' : ''} created: {importResult.collections_created.map((c: any) => c.title).join(', ')}
+                    </Text>
+                  )}
                 </View>
               </View>
             )}
@@ -299,5 +304,6 @@ const styles = StyleSheet.create({
   resultInfo: { flex: 1 },
   resultText: { fontSize: 14, fontWeight: '600', color: colors.success },
   resultError: { fontSize: 12, color: colors.warning },
+  resultCollections: { fontSize: 12, color: colors.primary, marginTop: 2 },
   importBtn: { marginTop: spacing.xs },
 });

@@ -1285,43 +1285,126 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
     
     reader = csv.DictReader(io.StringIO(data.csv_text), delimiter=data.delimiter)
     
+    # Pre-load artists and collections for name matching
+    all_artists = await db.artists.find({"user_id": current_user["id"]}).to_list(1000)
+    artist_map = {a["name"].lower(): a["id"] for a in all_artists}
+    
+    all_collections = await db.collections.find({"user_id": current_user["id"]}).to_list(1000)
+    collection_map = {c["title"].lower(): c["id"] for c in all_collections}
+    
+    # Track new collections created during import
+    created_collections = []
+    
     imported = []
     errors = []
     for i, row in enumerate(reader):
         try:
-            # Normalize column names (lowercase, strip)
+            # Normalize column names (lowercase, strip, underscores)
             row = {k.strip().lower().replace(' ', '_'): v.strip() for k, v in row.items() if k}
+            
+            # Resolve artist by name or ID
+            artist_id = data.artist_id  # default from modal picker
+            artist_name_raw = row.get("artist", row.get("artist_name", ""))
+            if artist_name_raw:
+                matched = artist_map.get(artist_name_raw.lower())
+                if matched:
+                    artist_id = matched
+                # If no match, keep the modal-selected artist_id
+            if row.get("artist_id"):
+                artist_id = row["artist_id"]
+            
+            # Resolve collection/album by name or ID
+            collection_id = row.get("collection_id")
+            album_name_raw = row.get("album", row.get("collection", row.get("project", row.get("ep", row.get("playlist", "")))))
+            if album_name_raw and not collection_id:
+                matched = collection_map.get(album_name_raw.lower())
+                if matched:
+                    collection_id = matched
+                else:
+                    # Auto-create draft collection
+                    new_coll = {
+                        "id": str(uuid.uuid4()),
+                        "user_id": current_user["id"],
+                        "title": album_name_raw,
+                        "artist_id": artist_id or "",
+                        "collection_type": "EP",
+                        "cover_image": "",
+                        "cover_image_url": "",
+                        "description": "",
+                        "release_date": None,
+                        "status": "in_progress",
+                        "notes": "Auto-created from CSV import",
+                        "track_count": 0,
+                        "created_at": datetime.utcnow(),
+                        "updated_at": datetime.utcnow(),
+                    }
+                    await db.collections.insert_one(new_coll)
+                    collection_id = new_coll["id"]
+                    collection_map[album_name_raw.lower()] = collection_id
+                    created_collections.append({"title": album_name_raw, "id": collection_id})
+            
+            # Build suno_generations from suno_link column
+            suno_gens = []
+            suno_link_raw = row.get("suno_link", row.get("suno_url", row.get("suno", "")))
+            if suno_link_raw:
+                suno_gens.append({
+                    "id": str(uuid.uuid4()),
+                    "suno_url": suno_link_raw,
+                    "prompt_used": row.get("style_prompt", row.get("style", "")),
+                    "style_tags": "",
+                    "rating": 0,
+                    "is_favorite": False,
+                    "notes": "",
+                    "created_at": datetime.utcnow(),
+                })
+            
+            # Default to draft if status not recognized
+            status = row.get("status", "draft").lower().strip()
+            if status not in ("draft", "in_progress", "final", "released"):
+                status = "draft"
             
             song_dict = {
                 "id": str(uuid.uuid4()),
                 "user_id": current_user["id"],
-                "title": row.get("title", row.get("song_title", row.get("name", f"Untitled {i+1}"))),
-                "artist_id": row.get("artist_id", data.artist_id),
+                "title": row.get("title", row.get("song_title", row.get("song", row.get("name", f"Untitled {i+1}")))),
+                "artist_id": artist_id,
                 "lyrics": row.get("lyrics", ""),
                 "style_prompt": row.get("style_prompt", row.get("style", row.get("suno_style", ""))),
                 "genre": row.get("genre", ""),
-                "mood": row.get("mood", ""),
+                "mood": row.get("mood", row.get("vibe", "")),
                 "tempo": row.get("tempo", row.get("bpm", "")),
-                "themes": [t.strip() for t in row.get("themes", "").split(",") if t.strip()] if row.get("themes") else [],
-                "status": row.get("status", "draft"),
+                "themes": [t.strip() for t in row.get("themes", row.get("tags", "")).split(",") if t.strip()] if row.get("themes", row.get("tags", "")) else [],
+                "status": status,
                 "notes": row.get("notes", ""),
                 "todo": [],
                 "versions": [],
-                "suno_generations": [],
-                "collection_id": row.get("collection_id"),
-                "track_number": int(row.get("track_number", row.get("track", "0")) or 0),
+                "suno_generations": suno_gens,
+                "collection_id": collection_id,
+                "track_number": int(row.get("track_number", row.get("track", row.get("track_#", "0"))) or 0),
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
             }
             await db.songs.insert_one(song_dict)
-            imported.append({"title": song_dict["title"], "id": song_dict["id"], "row": i+1})
+            imported.append({"title": song_dict["title"], "id": song_dict["id"], "row": i+1, "artist": artist_name_raw or "from picker", "album": album_name_raw or ""})
             
+            # Update artist song count
             if song_dict.get("artist_id"):
                 await db.artists.update_one({"id": song_dict["artist_id"]}, {"$inc": {"song_count": 1}})
+            
+            # Update collection track count
+            if collection_id:
+                await db.collections.update_one({"id": collection_id}, {"$inc": {"track_count": 1}})
+                
         except Exception as e:
             errors.append({"row": i+1, "error": str(e), "title": row.get("title", "unknown")})
     
-    return {"imported": len(imported), "errors": len(errors), "songs": imported, "error_details": errors}
+    return {
+        "imported": len(imported),
+        "errors": len(errors),
+        "songs": imported,
+        "error_details": errors,
+        "collections_created": created_collections,
+    }
 
 # ============== Revenue Chart Data ==============
 
