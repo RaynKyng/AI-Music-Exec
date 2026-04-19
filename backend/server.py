@@ -1376,6 +1376,7 @@ async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(
                 "themes": [t.strip() for t in row.get("themes", row.get("tags", "")).split(",") if t.strip()] if row.get("themes", row.get("tags", "")) else [],
                 "status": status,
                 "notes": row.get("notes", ""),
+                "exclusions": row.get("exclusions", row.get("exclusions_prompt", row.get("song_exclusions", ""))),
                 "todo": [],
                 "versions": [],
                 "suno_generations": suno_gens,
