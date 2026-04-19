@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert,
-  Modal, KeyboardAvoidingView, Platform, TextInput, Pressable,
+  Modal, KeyboardAvoidingView, Platform, TextInput, Pressable, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -163,16 +163,67 @@ export default function SongsScreen() {
                 </View>
                 <StatusBadge status={song.status} />
               </View>
-              {(song.genre || song.mood) && (
+
+              {/* Collection / Album */}
+              {(song as any).collection_id && (
+                <View style={styles.albumRow}>
+                  <Ionicons name="albums" size={12} color={colors.primary} />
+                  <Text style={styles.albumText}>
+                    {(song as any).track_number ? `Track ${(song as any).track_number} \u2022 ` : ''}Album assigned
+                  </Text>
+                </View>
+              )}
+
+              {/* Genre, Mood, Tempo row */}
+              {(song.genre || song.mood || song.tempo) && (
                 <View style={styles.metaRow}>
                   {song.genre ? <View style={styles.metaBadge}><Ionicons name="musical-notes" size={12} color={colors.primary} /><Text style={styles.metaText}>{song.genre}</Text></View> : null}
                   {song.mood ? <View style={styles.metaBadge}><Ionicons name="heart" size={12} color={colors.secondary} /><Text style={styles.metaText}>{song.mood}</Text></View> : null}
+                  {song.tempo ? <View style={styles.metaBadge}><Ionicons name="speedometer" size={12} color={colors.success} /><Text style={styles.metaText}>{song.tempo}</Text></View> : null}
                 </View>
               )}
+
+              {/* Themes */}
+              {song.themes?.length > 0 && (
+                <View style={styles.themesRow}>
+                  {song.themes.slice(0, 4).map((t, i) => (
+                    <View key={i} style={styles.themeChip}><Text style={styles.themeChipText}>{t}</Text></View>
+                  ))}
+                </View>
+              )}
+
+              {/* Primary style preview */}
+              {song.style_prompt ? (
+                <Text style={styles.stylePreview} numberOfLines={2}>{song.style_prompt}</Text>
+              ) : null}
+
+              {/* Lyrics preview */}
+              {song.lyrics ? (
+                <Text style={styles.lyricsPreview} numberOfLines={2}>
+                  {song.lyrics.split('\n').filter(l => l.trim()).slice(0, 2).join(' / ')}
+                </Text>
+              ) : null}
+
+              {/* Footer: versions, gens, todos, play button */}
               <View style={styles.songFooter}>
                 {song.versions?.length > 0 && <View style={styles.infoChip}><Ionicons name="layers" size={14} color={colors.textSecondary} /><Text style={styles.infoText}>{song.versions.length} ver</Text></View>}
                 {(song.suno_generations?.length > 0) && <View style={styles.infoChip}><Ionicons name="link" size={14} color={colors.primary} /><Text style={styles.infoText}>{song.suno_generations.length} gens</Text></View>}
                 {song.todo?.length > 0 && <View style={styles.infoChip}><Ionicons name="checkbox-outline" size={14} color={colors.warning} /><Text style={styles.infoText}>{song.todo.length} todos</Text></View>}
+                {(song as any).exclusions ? <View style={styles.infoChip}><Ionicons name="close-circle" size={14} color={colors.error} /><Text style={styles.infoText}>excl</Text></View> : null}
+
+                {/* Play button - shows if any suno link exists */}
+                {(song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)) && (
+                  <Pressable style={styles.playBtn} onPress={(e) => {
+                    e.stopPropagation();
+                    const url = song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)?.suno_link;
+                    if (url) {
+                      Linking.openURL(url);
+                    }
+                  }}>
+                    <Ionicons name="play-circle" size={28} color={colors.primary} />
+                  </Pressable>
+                )}
+
                 <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(song); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
                 </Pressable>
@@ -282,13 +333,21 @@ const styles = StyleSheet.create({
   songInfo: { flex: 1, marginRight: spacing.md },
   songTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
   artistName: { fontSize: 14, color: colors.primary, marginTop: 2 },
-  metaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  metaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
   metaBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceLight, paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 8, gap: 4 },
   metaText: { fontSize: 12, color: colors.textSecondary },
-  songFooter: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.md },
+  albumRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.xs },
+  albumText: { fontSize: 12, color: colors.primary, fontWeight: '500' },
+  themesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: spacing.sm },
+  themeChip: { backgroundColor: colors.surfaceLight, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  themeChipText: { fontSize: 11, color: colors.textMuted },
+  stylePreview: { fontSize: 12, color: colors.textSecondary, marginTop: spacing.sm, fontStyle: 'italic', lineHeight: 17 },
+  lyricsPreview: { fontSize: 12, color: colors.textMuted, marginTop: 4, lineHeight: 17 },
+  songFooter: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.md, flexWrap: 'wrap' },
   infoChip: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   infoText: { fontSize: 12, color: colors.textSecondary },
   deleteBtn: { marginLeft: 'auto', padding: spacing.sm, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  playBtn: { padding: 4 },
   // Modal
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.lg, paddingBottom: spacing.xxl, maxHeight: '90%' },
