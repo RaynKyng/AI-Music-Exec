@@ -19,6 +19,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
+import { CollabComments } from '../../src/components/CollabComments';
 import { colors, spacing } from '../../src/utils/theme';
 
 export default function ArtistDetailScreen() {
@@ -406,6 +407,12 @@ export default function ArtistDetailScreen() {
               numberOfLines={4}
             />
           </Card>
+
+          {!isNew && (
+            <Card style={styles.section}>
+              <CollabComments targetType="artist" targetId={id!} />
+            </Card>
+          )}
 
           <Button
             title={isNew ? 'Create Artist' : 'Save Changes'}

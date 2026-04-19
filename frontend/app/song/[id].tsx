@@ -18,6 +18,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
+import { CollabComments } from '../../src/components/CollabComments';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
 import { Song } from '../../src/types';
 
@@ -54,6 +55,9 @@ export default function SongDetailScreen() {
   const [todoInput, setTodoInput] = useState('');
   const [newVersion, setNewVersion] = useState({
     version_type: 'primary' as 'primary' | 'secondary' | 'alternate',
+    version_label: '',
+    is_assigned: false,
+    assigned_artist_id: null as string | null,
     audio_url: '',
     suno_link: '',
     notes: '',
@@ -317,7 +321,7 @@ export default function SongDetailScreen() {
           {!isNew && (
             <Card style={styles.section}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Versions ({form.versions.length})</Text>
+                <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Versions ({form.versions.length})</Text>
                 <TouchableOpacity
                   style={styles.addVersionBtn}
                   onPress={() => setShowVersionModal(true)}
@@ -325,25 +329,75 @@ export default function SongDetailScreen() {
                   <Ionicons name="add" size={20} color={colors.text} />
                 </TouchableOpacity>
               </View>
-              {form.versions.map((version, i) => (
-                <View key={i} style={styles.versionItem}>
-                  <View style={[
-                    styles.versionBadge,
-                    { backgroundColor: version.version_type === 'primary' ? colors.primary :
-                      version.version_type === 'secondary' ? colors.secondary : colors.warning }
-                  ]}>
-                    <Text style={styles.versionBadgeText}>{version.version_type}</Text>
+
+              {/* Assigned Version */}
+              {form.versions.filter(v => v.is_assigned || v.version_type === 'primary').length > 0 && (
+                <View style={styles.versionGroup}>
+                  <View style={styles.versionGroupHeader}>
+                    <Ionicons name="star" size={14} color={colors.success} />
+                    <Text style={styles.versionGroupTitle}>Assigned</Text>
                   </View>
-                  {version.suno_link && (
-                    <Text style={styles.versionLink} numberOfLines={1}>{version.suno_link}</Text>
-                  )}
-                  {version.notes && (
-                    <Text style={styles.versionNotes} numberOfLines={2}>{version.notes}</Text>
-                  )}
+                  {form.versions.filter(v => v.is_assigned || v.version_type === 'primary').map((version, i) => (
+                    <View key={version.id || i} style={[styles.versionItem, styles.assignedVersion]}>
+                      <View style={styles.versionRow}>
+                        <View style={[styles.versionBadge, { backgroundColor: colors.success }]}>
+                          <Text style={styles.versionBadgeText}>{version.version_label || version.version_type}</Text>
+                        </View>
+                        {version.suno_link ? <Text style={styles.versionLink} numberOfLines={1}>{version.suno_link}</Text> : null}
+                        <TouchableOpacity onPress={() => {
+                          Alert.alert('Delete', 'Remove this version?', [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Delete', style: 'destructive', onPress: () => deleteSongVersion(id!, version.id).then(loadSong) },
+                          ]);
+                        }}>
+                          <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        </TouchableOpacity>
+                      </View>
+                      {version.notes ? <Text style={styles.versionNotes}>{version.notes}</Text> : null}
+                    </View>
+                  ))}
                 </View>
-              ))}
+              )}
+
+              {/* Alternate Versions */}
+              {form.versions.filter(v => !v.is_assigned && v.version_type !== 'primary').length > 0 && (
+                <View style={styles.versionGroup}>
+                  <View style={styles.versionGroupHeader}>
+                    <Ionicons name="git-branch" size={14} color={colors.warning} />
+                    <Text style={styles.versionGroupTitle}>Alternates / Renditions</Text>
+                  </View>
+                  {form.versions.filter(v => !v.is_assigned && v.version_type !== 'primary').map((version, i) => (
+                    <View key={version.id || i} style={[styles.versionItem, styles.alternateVersion]}>
+                      <View style={styles.versionRow}>
+                        <View style={[styles.versionBadge, { backgroundColor: version.version_type === 'secondary' ? colors.secondary : colors.warning }]}>
+                          <Text style={styles.versionBadgeText}>{version.version_label || version.version_type}</Text>
+                        </View>
+                        {version.assigned_artist_id && version.assigned_artist_id !== form.artist_id && (
+                          <View style={styles.altArtistBadge}>
+                            <Ionicons name="person" size={10} color={colors.primary} />
+                            <Text style={styles.altArtistText}>
+                              {artists.find(a => a.id === version.assigned_artist_id)?.name || 'Other'}
+                            </Text>
+                          </View>
+                        )}
+                        <TouchableOpacity onPress={() => {
+                          Alert.alert('Delete', 'Remove this version?', [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Delete', style: 'destructive', onPress: () => deleteSongVersion(id!, version.id).then(loadSong) },
+                          ]);
+                        }}>
+                          <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        </TouchableOpacity>
+                      </View>
+                      {version.suno_link ? <Text style={styles.versionLink} numberOfLines={1}>{version.suno_link}</Text> : null}
+                      {version.notes ? <Text style={styles.versionNotes}>{version.notes}</Text> : null}
+                    </View>
+                  ))}
+                </View>
+              )}
+
               {form.versions.length === 0 && (
-                <Text style={styles.noVersions}>No versions yet</Text>
+                <Text style={styles.noVersions}>No versions yet. Add primary and alternate renditions.</Text>
               )}
             </Card>
           )}
@@ -430,6 +484,11 @@ export default function SongDetailScreen() {
                 )}
               </Card>
 
+              {/* Collaboration Notes */}
+              <Card style={styles.section}>
+                <CollabComments targetType="song" targetId={id!} />
+              </Card>
+
               {/* Quick Actions */}
               <View style={styles.actionRow}>
                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/song/share/${id}`)}>
@@ -472,7 +531,7 @@ export default function SongDetailScreen() {
                     styles.versionTypeChip,
                     newVersion.version_type === type && styles.versionTypeChipActive,
                   ]}
-                  onPress={() => setNewVersion({ ...newVersion, version_type: type as any })}
+                  onPress={() => setNewVersion({ ...newVersion, version_type: type as any, is_assigned: type === 'primary' })}
                 >
                   <Text
                     style={[
@@ -485,6 +544,41 @@ export default function SongDetailScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            <Input
+              label="Version Label"
+              placeholder="e.g., Original, Acoustic, TikTok Cut, Extended..."
+              value={newVersion.version_label}
+              onChangeText={(text) => setNewVersion({ ...newVersion, version_label: text })}
+            />
+
+            <TouchableOpacity
+              style={[styles.assignToggle, newVersion.is_assigned && styles.assignToggleActive]}
+              onPress={() => setNewVersion({ ...newVersion, is_assigned: !newVersion.is_assigned })}
+            >
+              <Ionicons name={newVersion.is_assigned ? 'star' : 'star-outline'} size={18} color={newVersion.is_assigned ? colors.text : colors.textSecondary} />
+              <Text style={[styles.assignToggleText, newVersion.is_assigned && { color: colors.text }]}>
+                {newVersion.is_assigned ? 'Assigned (Primary)' : 'Alternate / Rendition'}
+              </Text>
+            </TouchableOpacity>
+
+            {!newVersion.is_assigned && artists.length > 0 && (
+              <>
+                <Text style={styles.label}>Link to Different Artist (optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                  <TouchableOpacity style={[styles.versionTypeChip, !newVersion.assigned_artist_id && styles.versionTypeChipActive]}
+                    onPress={() => setNewVersion({ ...newVersion, assigned_artist_id: null })}>
+                    <Text style={[styles.versionTypeText, !newVersion.assigned_artist_id && styles.versionTypeTextActive]}>Same Artist</Text>
+                  </TouchableOpacity>
+                  {artists.map(a => (
+                    <TouchableOpacity key={a.id} style={[styles.versionTypeChip, newVersion.assigned_artist_id === a.id && styles.versionTypeChipActive, { marginLeft: 8 }]}
+                      onPress={() => setNewVersion({ ...newVersion, assigned_artist_id: a.id })}>
+                      <Text style={[styles.versionTypeText, newVersion.assigned_artist_id === a.id && styles.versionTypeTextActive]}>{a.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
 
             <Input
               label="Suno Link"
@@ -745,6 +839,36 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     marginBottom: spacing.sm,
   },
+  assignedVersion: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.success,
+  },
+  alternateVersion: {
+    borderLeftWidth: 3,
+    borderLeftColor: colors.warning,
+    opacity: 0.9,
+  },
+  versionGroup: {
+    marginTop: spacing.sm,
+  },
+  versionGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: spacing.xs,
+  },
+  versionGroupTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  versionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   versionBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.sm,
@@ -771,6 +895,39 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
     fontStyle: 'italic',
+  },
+  altArtistBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+    flex: 1,
+  },
+  altArtistText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  assignToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 12,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  assignToggleActive: {
+    backgroundColor: colors.success,
+  },
+  assignToggleText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
   todoItem: {
     flexDirection: 'row',

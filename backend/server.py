@@ -113,11 +113,26 @@ class SunoGeneration(BaseModel):
 class SongVersion(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     version_type: str  # primary, secondary, alternate
-    version_label: str = ""  # user-friendly label
+    version_label: str = ""  # e.g., "Original", "Acoustic", "TikTok Cut", "Extended"
+    is_assigned: bool = False  # True = this is the primary assigned version
+    assigned_artist_id: Optional[str] = None  # alternate can be linked to different artist
     audio_url: str = ""
     suno_link: str = ""
     suno_generations: List[SunoGeneration] = []
     notes: str = ""
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Collaborative Comment Model
+class CommentCreate(BaseModel):
+    target_type: str  # "artist" or "song"
+    target_id: str
+    content: str
+    comment_type: str = "note"  # note, visual_suggestion, remix_idea, feedback
+
+class Comment(CommentCreate):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    author_id: str
+    author_name: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class SongCreate(BaseModel):
@@ -1217,6 +1232,137 @@ Follow {artist_name}:
         "song_title": title,
         "artist_name": artist_name,
         "formats": formats
+    }
+
+# ============== Collaborative Comments ==============
+
+@api_router.post("/comments", response_model=Comment)
+async def create_comment(data: CommentCreate, current_user: dict = Depends(get_current_user)):
+    d = data.dict()
+    d["id"] = str(uuid.uuid4())
+    d["author_id"] = current_user["id"]
+    d["author_name"] = current_user.get("name", "Unknown")
+    d["created_at"] = datetime.utcnow()
+    await db.comments.insert_one(d)
+    return Comment(**d)
+
+@api_router.get("/comments")
+async def get_comments(target_type: str, target_id: str, current_user: dict = Depends(get_current_user)):
+    comments = await db.comments.find({"target_type": target_type, "target_id": target_id}).sort("created_at", -1).to_list(500)
+    result = []
+    for c in comments:
+        entry = {k: v for k, v in c.items() if k != "_id"}
+        entry["is_own"] = c.get("author_id") == current_user["id"]
+        result.append(entry)
+    return result
+
+@api_router.delete("/comments/{comment_id}")
+async def delete_comment(comment_id: str, current_user: dict = Depends(get_current_user)):
+    comment = await db.comments.find_one({"id": comment_id})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if comment["author_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Can only delete your own comments")
+    await db.comments.delete_one({"id": comment_id})
+    return {"message": "Comment deleted"}
+
+# ============== CSV Import Parser ==============
+
+class CSVImportRequest(BaseModel):
+    csv_text: str
+    artist_id: Optional[str] = None
+    delimiter: str = ","
+
+@api_router.post("/songs/csv-import")
+async def csv_import_songs(data: CSVImportRequest, current_user: dict = Depends(get_current_user)):
+    import csv
+    import io
+    
+    reader = csv.DictReader(io.StringIO(data.csv_text), delimiter=data.delimiter)
+    
+    imported = []
+    errors = []
+    for i, row in enumerate(reader):
+        try:
+            # Normalize column names (lowercase, strip)
+            row = {k.strip().lower().replace(' ', '_'): v.strip() for k, v in row.items() if k}
+            
+            song_dict = {
+                "id": str(uuid.uuid4()),
+                "user_id": current_user["id"],
+                "title": row.get("title", row.get("song_title", row.get("name", f"Untitled {i+1}"))),
+                "artist_id": row.get("artist_id", data.artist_id),
+                "lyrics": row.get("lyrics", ""),
+                "style_prompt": row.get("style_prompt", row.get("style", row.get("suno_style", ""))),
+                "genre": row.get("genre", ""),
+                "mood": row.get("mood", ""),
+                "tempo": row.get("tempo", row.get("bpm", "")),
+                "themes": [t.strip() for t in row.get("themes", "").split(",") if t.strip()] if row.get("themes") else [],
+                "status": row.get("status", "draft"),
+                "notes": row.get("notes", ""),
+                "todo": [],
+                "versions": [],
+                "suno_generations": [],
+                "collection_id": row.get("collection_id"),
+                "track_number": int(row.get("track_number", row.get("track", "0")) or 0),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+            await db.songs.insert_one(song_dict)
+            imported.append({"title": song_dict["title"], "id": song_dict["id"], "row": i+1})
+            
+            if song_dict.get("artist_id"):
+                await db.artists.update_one({"id": song_dict["artist_id"]}, {"$inc": {"song_count": 1}})
+        except Exception as e:
+            errors.append({"row": i+1, "error": str(e), "title": row.get("title", "unknown")})
+    
+    return {"imported": len(imported), "errors": len(errors), "songs": imported, "error_details": errors}
+
+# ============== Revenue Chart Data ==============
+
+@api_router.get("/revenue/chart")
+async def get_revenue_chart(current_user: dict = Depends(get_current_user)):
+    entries = await db.revenue.find({"user_id": current_user["id"]}).to_list(1000)
+    
+    # Group by period
+    by_period = {}
+    for e in entries:
+        period = e.get("period", "Unknown")
+        if period not in by_period:
+            by_period[period] = 0
+        by_period[period] += e.get("amount", 0)
+    
+    # Group by platform
+    by_platform = {}
+    for e in entries:
+        platform = e.get("platform", "other")
+        if platform not in by_platform:
+            by_platform[platform] = 0
+        by_platform[platform] += e.get("amount", 0)
+    
+    # Top songs by revenue
+    by_song = {}
+    for e in entries:
+        sid = e.get("song_id", "unknown")
+        if sid and sid != "unknown":
+            if sid not in by_song:
+                by_song[sid] = 0
+            by_song[sid] += e.get("amount", 0)
+    
+    # Get song titles
+    top_songs = []
+    for sid, amount in sorted(by_song.items(), key=lambda x: x[1], reverse=True)[:10]:
+        song = await db.songs.find_one({"id": sid})
+        top_songs.append({"song_id": sid, "title": song.get("title", "Unknown") if song else "Unknown", "amount": amount})
+    
+    total = sum(e.get("amount", 0) for e in entries)
+    
+    return {
+        "total": total,
+        "by_period": [{"period": k, "amount": v} for k, v in sorted(by_period.items())],
+        "by_platform": [{"platform": k, "amount": v} for k, v in sorted(by_platform.items(), key=lambda x: x[1], reverse=True)],
+        "top_songs": top_songs,
+        "entry_count": len(entries),
     }
 
 # Include the router in the main app

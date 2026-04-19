@@ -1,73 +1,75 @@
 # AI Music Artist Manager - PRD
 
 ## Overview
-A comprehensive AI-powered mobile app for managing AI music artists and songs from concept to release. Operates like an AI Music Executive building a roster of artists with consistent sounds, looks, branding, and visuals.
+A comprehensive AI-powered mobile app for managing AI music artists and songs from concept to release. Built for a husband-wife creative team - operates like an AI Music Executive building a roster of artists with consistent sounds, looks, branding, and visuals.
 
 ## Core Features
 
 ### 1. Artist Roster with Identity Package
-- Full artist profiles: Name, bio, unique sound, genres, themes, tone, patterns
+- Full profiles: Name, bio, unique sound, genres, themes, tone, patterns
 - **Profile image upload** (device upload as base64 or paste URL)
 - Visual branding: style, aesthetic, mood keywords, color palette
-- **Visual Identity Brief** - shareable description for collaborators (wife) to understand the artist's visual direction
-- **Identity Package API** - consolidated view of artist identity for quick reference
-- Search by name, bio, sound
+- **Visual Identity Brief** - shareable description for collaborators to understand visual direction
+- **Identity Package API** - consolidated artist identity for quick reference
+- **Collaborative Notes** - leave visual suggestions, remix ideas, feedback (notes from different users appear with different styling)
 
-### 2. Song Catalog with Versions & Suno Tracking
-- Full CRUD with lyrics, Suno-formatted style prompts, genre, mood, tempo
-- Version tracking: Primary, Secondary, Alternate
-- Status workflow: Draft -> In Progress -> Final -> Released
-- **Suno Generation Links** - track multiple Suno URLs with prompts used and star ratings
+### 2. Song Catalog with Assigned vs Alternate Versions
+- Lyrics, Suno-formatted style prompts, genre, mood, tempo
+- **Version system with clear separation:**
+  - **Assigned** (primary, marked with star) - the version used for this artist
+  - **Alternates/Renditions** - can be repurposed, remixed, linked to different artists
+  - Version labels: Original, Acoustic, TikTok Cut, Extended, etc.
+  - Alternate versions can be linked to different artists
+- Status workflow: Draft → In Progress → Final → Released
+- Suno Generation link tracking with ratings
 - To-do lists, notes, themes
-- Search + filter by status + filter by artist (combined)
-- **Collection/EP/LP assignment** with track numbers
+- Search + filter by status + filter by artist
+- **Collaborative Notes** per song
+- Collection/EP/LP assignment
 
-### 3. Collections (EP/LP/Album Releases)
-- **New Releases tab** - organize songs into EPs, LPs, Singles, Albums
-- Cover art support (URL-based)
-- Artist assignment, track counting
-- Status: In Progress, Completed, Released
-- Search and browse all releases
+### 3. Collections (EP/LP/Album) - "Releases" Tab
+- Organize songs into EPs, LPs, Singles, Albums
+- Cover art support
+- Artist assignment + track counting
+- Status: In Progress → Completed → Released
 
-### 4. Quick Idea Capture
-- Types: Spark, Concept, Lyrics, Melody, Style, Visual
-- Tags, artist/song linking, search
+### 4. CSV Bulk Import
+- **Paste CSV directly** from Google Sheets (comma, tab, or custom delimiter)
+- Auto-maps columns: title, genre, mood, style_prompt, status, lyrics, tempo, themes
+- Preview count before importing
+- Assign all to a specific artist
+- Error reporting per row
 
-### 5. AI Tools Suite
-- **Suno Prompt Generator** - copyright-free style prompts
-- **Content Analyzer** - lyrics analysis, artist matching, enhancement
-- **Video Storyboard Generator** (NEW) - AI-generated scene-by-scene video prompts with:
-  - Timestamps following song structure
-  - Camera directions, lighting, mood per scene
-  - Platform-adapted formats: YouTube (16:9), TikTok (9:16 vertical), Instagram Reels
-  - Artist identity-aware visual directions
-
-### 6. Platform-Specific Sharing
-- Auto-formatted content for 7 platforms (Instagram, TikTok, YouTube, Twitter, Spotify, Apple Music, SoundCloud)
-- Copy-to-clipboard per platform
-
-### 7. Distribution Tracking
-- 8 platforms with status badges (Pending/Submitted/Live/Rejected)
-- URL + notes per platform
-
-### 8. Revenue/Monetization Tracking
+### 5. Revenue/Monetization Tracking
 - Track income per song, per platform, per period
 - Revenue types: Streaming, Sync, Licensing, Merch, Social
-- Summary with totals by platform and by type
-- Expert-level structure ready for scaling
+- **Chart data API**: totals by period, by platform, top songs
+- Summary dashboard
 
-### 9. Bulk Import
-- Import multiple songs at once via JSON array
-- Supports all song fields including artist assignment
-- CSV-to-JSON format guide for Google Sheets users
+### 6. AI Tools Suite
+- **Suno Prompt Generator** - copyright-free style prompts
+- **Content Analyzer** - lyrics analysis, artist matching, enhancement
+- **Video Storyboard Generator** - scene-by-scene prompts for YouTube, TikTok, Instagram
+  - Timestamps, camera directions, lighting, mood per scene
+  - Platform-adapted formats
+  - Artist identity-aware
 
-### 10. Dashboard
-- Stats: Artists, Songs, Ideas counts
-- Song status breakdown
-- Recent activity
+### 7. Collaborative Workflow
+- **Comments on artists and songs** with 4 types: Note, Visual Suggestion, Remix Idea, Feedback
+- **Creator vs Collaborator** visual distinction (different border colors, "Collaborator" badge)
+- Own comments deletable, collaborator notes highlighted in pink
+- Wife can leave visual ideas, remix suggestions; creator implements or discards
+
+### 8. Platform-Specific Sharing (7 platforms)
+### 9. Distribution Tracking (8 platforms with status)
+### 10. Quick Idea Capture (6 types with tags)
+### 11. Dashboard with stats
 
 ## Tech Stack
 - **Frontend**: Expo React Native (SDK 54), expo-router, Zustand, expo-image-picker
 - **Backend**: FastAPI, MongoDB (Motor), JWT auth
 - **AI**: OpenAI GPT-5.2 via Emergent LLM Integration
-- **Auth**: JWT-based for multi-user (you + wife)
+- **Auth**: JWT-based for multi-user access
+
+## Navigation: 6 tabs
+Home | Artists | Songs | Releases | Ideas | AI
