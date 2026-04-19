@@ -86,6 +86,9 @@ class ArtistCreate(BaseModel):
     patterns: List[str] = []
     branding: ArtistBranding = ArtistBranding()
     image_url: str = ""
+    profile_image: str = ""  # base64 encoded image
+    visual_brief: str = ""  # shareable visual identity description
+    visual_references: List[str] = []  # reference image URLs
     notes: str = ""
 
 class Artist(ArtistCreate):
@@ -120,6 +123,7 @@ class SongVersion(BaseModel):
 class SongCreate(BaseModel):
     title: str
     artist_id: Optional[str] = None
+    collection_id: Optional[str] = None  # EP/LP it belongs to
     lyrics: str = ""
     style_prompt: str = ""  # Suno-formatted
     genre: str = ""
@@ -131,6 +135,7 @@ class SongCreate(BaseModel):
     todo: List[str] = []
     versions: List[SongVersion] = []
     suno_generations: List[SunoGeneration] = []  # song-level Suno links
+    track_number: int = 0  # position in collection
 
 class Song(SongCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -182,6 +187,53 @@ class AIAnalysisResponse(BaseModel):
     analysis: str
     suggestions: List[str] = []
     suno_prompt: Optional[str] = None
+
+# Collection Models (EP/LP)
+class CollectionCreate(BaseModel):
+    title: str
+    artist_id: str
+    collection_type: str = "EP"  # EP, LP, Single, Album
+    cover_image: str = ""  # base64 or URL
+    cover_image_url: str = ""
+    description: str = ""
+    release_date: Optional[str] = None
+    status: str = "in_progress"  # in_progress, completed, released
+    notes: str = ""
+
+class Collection(CollectionCreate):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    track_count: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Revenue Models
+class RevenueEntryCreate(BaseModel):
+    song_id: Optional[str] = None
+    artist_id: Optional[str] = None
+    platform: str  # spotify, apple_music, youtube, tiktok, licensing, etc.
+    amount: float = 0.0
+    currency: str = "USD"
+    period: str = ""  # e.g., "2026-01", "Q1 2026"
+    revenue_type: str = "streaming"  # streaming, sync, licensing, merch, social
+    notes: str = ""
+
+class RevenueEntry(RevenueEntryCreate):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+# Bulk Import Model
+class BulkSongImport(BaseModel):
+    songs: List[dict]  # list of song dicts with title, lyrics, genre, etc.
+
+# Video Prompt Request
+class VideoPromptRequest(BaseModel):
+    song_id: Optional[str] = None
+    lyrics: str = ""
+    artist_id: Optional[str] = None
+    style: str = ""  # visual style direction
+    platforms: List[str] = ["youtube", "tiktok", "instagram"]
 
 # ============== Auth Helpers ==============
 
@@ -712,6 +764,284 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
 @api_router.get("/health")
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+
+# ============== Collection (EP/LP) Routes ==============
+
+@api_router.post("/collections", response_model=Collection)
+async def create_collection(data: CollectionCreate, current_user: dict = Depends(get_current_user)):
+    d = data.dict()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["id"]
+    d["track_count"] = 0
+    d["created_at"] = datetime.utcnow()
+    d["updated_at"] = datetime.utcnow()
+    await db.collections.insert_one(d)
+    return Collection(**d)
+
+@api_router.get("/collections", response_model=List[Collection])
+async def get_collections(artist_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    query = {"user_id": current_user["id"]}
+    if artist_id:
+        query["artist_id"] = artist_id
+    items = await db.collections.find(query).sort("updated_at", -1).to_list(1000)
+    return [Collection(**c) for c in items]
+
+@api_router.get("/collections/{coll_id}", response_model=Collection)
+async def get_collection(coll_id: str, current_user: dict = Depends(get_current_user)):
+    c = await db.collections.find_one({"id": coll_id, "user_id": current_user["id"]})
+    if not c:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return Collection(**c)
+
+@api_router.put("/collections/{coll_id}", response_model=Collection)
+async def update_collection(coll_id: str, data: CollectionCreate, current_user: dict = Depends(get_current_user)):
+    c = await db.collections.find_one({"id": coll_id, "user_id": current_user["id"]})
+    if not c:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    update_dict = data.dict()
+    update_dict["updated_at"] = datetime.utcnow()
+    # Recount tracks
+    track_count = await db.songs.count_documents({"collection_id": coll_id, "user_id": current_user["id"]})
+    update_dict["track_count"] = track_count
+    await db.collections.update_one({"id": coll_id}, {"$set": update_dict})
+    updated = await db.collections.find_one({"id": coll_id})
+    return Collection(**updated)
+
+@api_router.delete("/collections/{coll_id}")
+async def delete_collection(coll_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.collections.delete_one({"id": coll_id, "user_id": current_user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    # Unlink songs
+    await db.songs.update_many({"collection_id": coll_id}, {"$set": {"collection_id": None}})
+    return {"message": "Collection deleted"}
+
+@api_router.get("/collections/{coll_id}/songs", response_model=List[Song])
+async def get_collection_songs(coll_id: str, current_user: dict = Depends(get_current_user)):
+    songs = await db.songs.find({"collection_id": coll_id, "user_id": current_user["id"]}).sort("track_number", 1).to_list(1000)
+    return [Song(**s) for s in songs]
+
+# ============== Revenue Routes ==============
+
+@api_router.post("/revenue", response_model=RevenueEntry)
+async def create_revenue_entry(data: RevenueEntryCreate, current_user: dict = Depends(get_current_user)):
+    d = data.dict()
+    d["id"] = str(uuid.uuid4())
+    d["user_id"] = current_user["id"]
+    d["created_at"] = datetime.utcnow()
+    await db.revenue.insert_one(d)
+    return RevenueEntry(**d)
+
+@api_router.get("/revenue")
+async def get_revenue(
+    artist_id: Optional[str] = None,
+    song_id: Optional[str] = None,
+    platform: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"user_id": current_user["id"]}
+    if artist_id:
+        query["artist_id"] = artist_id
+    if song_id:
+        query["song_id"] = song_id
+    if platform:
+        query["platform"] = platform
+    
+    entries = await db.revenue.find(query).sort("created_at", -1).to_list(1000)
+    
+    # Calculate summary
+    total = sum(e.get("amount", 0) for e in entries)
+    by_platform = {}
+    by_type = {}
+    for e in entries:
+        p = e.get("platform", "other")
+        by_platform[p] = by_platform.get(p, 0) + e.get("amount", 0)
+        t = e.get("revenue_type", "other")
+        by_type[t] = by_type.get(t, 0) + e.get("amount", 0)
+    
+    return {
+        "total": total,
+        "by_platform": by_platform,
+        "by_type": by_type,
+        "entries": [{k: v for k, v in e.items() if k != "_id"} for e in entries],
+        "count": len(entries)
+    }
+
+@api_router.delete("/revenue/{entry_id}")
+async def delete_revenue_entry(entry_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.revenue.delete_one({"id": entry_id, "user_id": current_user["id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Entry not found")
+    return {"message": "Revenue entry deleted"}
+
+# ============== Bulk Import ==============
+
+@api_router.post("/songs/bulk-import")
+async def bulk_import_songs(data: BulkSongImport, current_user: dict = Depends(get_current_user)):
+    imported = []
+    errors = []
+    for i, song_data in enumerate(data.songs):
+        try:
+            song_dict = {
+                "id": str(uuid.uuid4()),
+                "user_id": current_user["id"],
+                "title": song_data.get("title", f"Untitled {i+1}"),
+                "artist_id": song_data.get("artist_id"),
+                "collection_id": song_data.get("collection_id"),
+                "lyrics": song_data.get("lyrics", ""),
+                "style_prompt": song_data.get("style_prompt", ""),
+                "genre": song_data.get("genre", ""),
+                "mood": song_data.get("mood", ""),
+                "tempo": song_data.get("tempo", ""),
+                "themes": song_data.get("themes", []),
+                "status": song_data.get("status", "draft"),
+                "notes": song_data.get("notes", ""),
+                "todo": song_data.get("todo", []),
+                "versions": song_data.get("versions", []),
+                "suno_generations": song_data.get("suno_generations", []),
+                "track_number": song_data.get("track_number", 0),
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+            await db.songs.insert_one(song_dict)
+            imported.append({"title": song_dict["title"], "id": song_dict["id"]})
+            
+            # Update artist song count
+            if song_dict.get("artist_id"):
+                await db.artists.update_one(
+                    {"id": song_dict["artist_id"]},
+                    {"$inc": {"song_count": 1}}
+                )
+        except Exception as e:
+            errors.append({"index": i, "error": str(e), "title": song_data.get("title", "unknown")})
+    
+    return {"imported": len(imported), "errors": len(errors), "songs": imported, "error_details": errors}
+
+# ============== AI Video Prompts ==============
+
+@api_router.post("/ai/video-prompts")
+async def generate_video_prompts(request: VideoPromptRequest, current_user: dict = Depends(get_current_user)):
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    # Get song and artist context
+    lyrics = request.lyrics
+    artist_context = ""
+    
+    if request.song_id:
+        song = await db.songs.find_one({"id": request.song_id, "user_id": current_user["id"]})
+        if song:
+            lyrics = song.get("lyrics", lyrics)
+            if song.get("artist_id"):
+                request.artist_id = song["artist_id"]
+    
+    if request.artist_id:
+        artist = await db.artists.find_one({"id": request.artist_id, "user_id": current_user["id"]})
+        if artist:
+            artist_context = f"""
+Artist: {artist.get('name', '')}
+Visual Style: {artist.get('branding', {}).get('visual_style', '')}
+Aesthetic: {artist.get('branding', {}).get('aesthetic', '')}
+Mood: {', '.join(artist.get('branding', {}).get('mood_keywords', []))}
+Tone: {artist.get('tone', '')}
+Visual Brief: {artist.get('visual_brief', '')}
+"""
+    
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"video-{current_user['id']}-{uuid.uuid4()}",
+            system_message=f"""You are an expert music video director and visual storyteller. 
+{artist_context}
+
+Create detailed scene-by-scene video prompts that:
+1. Follow the emotional arc of the lyrics
+2. Match the artist's visual identity and aesthetic
+3. Include specific visual directions (camera angles, lighting, color grading)
+4. Are formatted for AI video generation tools like Sora or Runway
+5. Adapt to different platform formats when requested
+
+Do NOT reference real artists, directors, or copyrighted works.
+Include timestamps based on typical song structure."""
+        ).with_model("openai", "gpt-5.2")
+        
+        platform_instructions = ""
+        for p in request.platforms:
+            if p == "youtube":
+                platform_instructions += "\n- YouTube (16:9 landscape, 3-5 min, cinematic quality)"
+            elif p == "tiktok":
+                platform_instructions += "\n- TikTok (9:16 vertical, 15-60sec hooks, fast cuts)"
+            elif p == "instagram":
+                platform_instructions += "\n- Instagram Reels (9:16 vertical, 15-90sec, aesthetic focus)"
+        
+        prompt = f"""Create a complete music video concept with scene-by-scene prompts for the following lyrics:
+
+{lyrics[:2000]}
+
+{f'Visual style direction: {request.style}' if request.style else ''}
+
+Generate:
+1. **Overall Vision**: 2-3 sentence concept overview
+2. **Scene-by-Scene Storyboard**: 6-10 scenes with:
+   - Timestamp (e.g., 0:00-0:15)
+   - Visual description (what we see)
+   - Camera/movement direction
+   - Mood/lighting
+   - AI generation prompt for that scene
+3. **Platform Adaptations**: Format-specific directions for:{platform_instructions}
+"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        return {"video_prompts": response, "platforms": request.platforms}
+        
+    except Exception as e:
+        logger.error(f"Video prompt generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Video prompt generation failed: {str(e)}")
+
+# ============== Artist Identity Package ==============
+
+@api_router.get("/artists/{artist_id}/identity-package")
+async def get_artist_identity_package(artist_id: str, current_user: dict = Depends(get_current_user)):
+    artist = await db.artists.find_one({"id": artist_id, "user_id": current_user["id"]})
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    
+    # Get artist's songs for context
+    songs = await db.songs.find({"artist_id": artist_id, "user_id": current_user["id"]}).to_list(100)
+    collections = await db.collections.find({"artist_id": artist_id, "user_id": current_user["id"]}).to_list(100)
+    
+    return {
+        "artist": {k: v for k, v in artist.items() if k != "_id"},
+        "identity": {
+            "name": artist.get("name", ""),
+            "profile_image": artist.get("profile_image", ""),
+            "visual_style": artist.get("branding", {}).get("visual_style", ""),
+            "aesthetic": artist.get("branding", {}).get("aesthetic", ""),
+            "color_palette": artist.get("branding", {}).get("color_palette", []),
+            "mood_keywords": artist.get("branding", {}).get("mood_keywords", []),
+            "visual_brief": artist.get("visual_brief", ""),
+            "visual_references": artist.get("visual_references", []),
+            "tone": artist.get("tone", ""),
+            "unique_sound": artist.get("unique_sound", ""),
+            "genres": artist.get("genres", []),
+            "themes": artist.get("themes", []),
+        },
+        "catalog_summary": {
+            "total_songs": len(songs),
+            "collections": [{"id": c["id"], "title": c["title"], "type": c.get("collection_type", "EP"), "cover": c.get("cover_image", "") or c.get("cover_image_url", "")} for c in collections],
+            "genres": list(set(s.get("genre", "") for s in songs if s.get("genre"))),
+            "moods": list(set(s.get("mood", "") for s in songs if s.get("mood"))),
+        }
+    }
+
+# ============== Image Upload ==============
+
+@api_router.post("/upload/image")
+async def upload_image(current_user: dict = Depends(get_current_user)):
+    """Placeholder for image upload - accepts base64 in request body"""
+    return {"message": "Use profile_image field on artist or cover_image on collection with base64 data"}
 
 # ============== Version Management ==============
 

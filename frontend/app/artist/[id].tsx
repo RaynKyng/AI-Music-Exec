@@ -8,17 +8,18 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useDataStore } from '../../src/stores/dataStore';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { colors, spacing } from '../../src/utils/theme';
-import { Artist } from '../../src/types';
 
 export default function ArtistDetailScreen() {
   const router = useRouter();
@@ -43,6 +44,9 @@ export default function ArtistDetailScreen() {
       mood_keywords: [] as string[],
     },
     image_url: '',
+    profile_image: '',
+    visual_brief: '',
+    visual_references: [] as string[],
     notes: '',
   });
   
@@ -71,6 +75,9 @@ export default function ArtistDetailScreen() {
         patterns: artist.patterns,
         branding: artist.branding,
         image_url: artist.image_url,
+        profile_image: artist.profile_image || '',
+        visual_brief: artist.visual_brief || '',
+        visual_references: artist.visual_references || [],
         notes: artist.notes,
       });
     }
@@ -148,6 +155,56 @@ export default function ArtistDetailScreen() {
         style={styles.flex}
       >
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          <Card style={styles.section}>
+            <Text style={styles.sectionTitle}>Profile Image</Text>
+            <View style={styles.imageSection}>
+              {(form.profile_image || form.image_url) ? (
+                <Image 
+                  source={{ uri: form.profile_image || form.image_url }} 
+                  style={styles.profileImg} 
+                />
+              ) : (
+                <View style={[styles.profileImg, styles.profilePlaceholder]}>
+                  <Ionicons name="person" size={40} color={colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.imageButtons}>
+                <TouchableOpacity style={styles.imgBtn} onPress={async () => {
+                  try {
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                      mediaTypes: ['images'],
+                      allowsEditing: true,
+                      aspect: [1, 1],
+                      quality: 0.5,
+                      base64: true,
+                    });
+                    if (!result.canceled && result.assets[0].base64) {
+                      setForm({ ...form, profile_image: `data:image/jpeg;base64,${result.assets[0].base64}` });
+                    }
+                  } catch { Alert.alert('Error', 'Could not pick image'); }
+                }}>
+                  <Ionicons name="image" size={18} color={colors.text} />
+                  <Text style={styles.imgBtnText}>Upload</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.imgBtn} onPress={() => {
+                  Alert.prompt ? Alert.prompt('Image URL', 'Paste image URL:', (url) => {
+                    if (url) setForm({ ...form, image_url: url, profile_image: '' });
+                  }) : setForm({ ...form });
+                }}>
+                  <Ionicons name="link" size={18} color={colors.text} />
+                  <Text style={styles.imgBtnText}>URL</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            <Input
+              label="Image URL (alternative)"
+              placeholder="https://..."
+              value={form.image_url}
+              onChangeText={(text) => setForm({ ...form, image_url: text })}
+              autoCapitalize="none"
+            />
+          </Card>
+
           <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Basic Info</Text>
             <Input
@@ -325,6 +382,21 @@ export default function ArtistDetailScreen() {
           </Card>
 
           <Card style={styles.section}>
+            <Text style={styles.sectionTitle}>Visual Identity Brief</Text>
+            <Text style={styles.briefDesc}>
+              This brief helps collaborators understand the artist's visual direction
+            </Text>
+            <Input
+              label="Visual Brief"
+              placeholder="Describe the overall visual direction, character model look, color themes, video aesthetics..."
+              value={form.visual_brief}
+              onChangeText={(text) => setForm({ ...form, visual_brief: text })}
+              multiline
+              numberOfLines={5}
+            />
+          </Card>
+
+          <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Notes</Text>
             <Input
               placeholder="Additional notes about this artist"
@@ -441,5 +513,45 @@ const styles = StyleSheet.create({
   },
   bottomPadding: {
     height: 40,
+  },
+  imageSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    gap: spacing.md,
+  },
+  profileImg: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  profilePlaceholder: {
+    backgroundColor: colors.surfaceLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageButtons: {
+    flex: 1,
+    gap: spacing.sm,
+  },
+  imgBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: 8,
+    gap: spacing.sm,
+  },
+  imgBtnText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  briefDesc: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+    fontStyle: 'italic',
   },
 });

@@ -41,6 +41,13 @@ export default function AIToolsScreen() {
   const [sunoPrompt, setSunoPrompt] = useState('');
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
 
+  // Video prompts
+  const [videoLyrics, setVideoLyrics] = useState('');
+  const [videoStyle, setVideoStyle] = useState('');
+  const [videoArtist, setVideoArtist] = useState<string | null>(null);
+  const [videoResult, setVideoResult] = useState('');
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+
   React.useEffect(() => {
     fetchArtists();
   }, []);
@@ -308,6 +315,92 @@ export default function AIToolsScreen() {
                 )}
               </View>
             )}
+          </Card>
+
+          {/* Video Prompt Generator */}
+          <Card style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="videocam" size={24} color={'#EF4444'} />
+              <Text style={styles.sectionTitle}>Video Storyboard</Text>
+            </View>
+            <Text style={styles.sectionDesc}>
+              Generate scene-by-scene video prompts adapted for YouTube, TikTok, and Instagram
+            </Text>
+
+            <Input
+              label="Lyrics / Song Content"
+              placeholder="Paste lyrics to generate video scenes..."
+              value={videoLyrics}
+              onChangeText={setVideoLyrics}
+              multiline
+              numberOfLines={4}
+            />
+
+            <Input
+              label="Visual Style Direction (optional)"
+              placeholder="e.g., Neon cityscape, vintage film grain..."
+              value={videoStyle}
+              onChangeText={setVideoStyle}
+            />
+
+            {artists.length > 0 && (
+              <>
+                <Text style={styles.label}>Link to Artist (optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
+                  <TouchableOpacity
+                    style={[styles.artistChip, !videoArtist && styles.artistChipActive]}
+                    onPress={() => setVideoArtist(null)}
+                  >
+                    <Text style={[styles.artistChipText, !videoArtist && styles.artistChipTextActive]}>None</Text>
+                  </TouchableOpacity>
+                  {artists.map((a) => (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[styles.artistChip, videoArtist === a.id && styles.artistChipActive]}
+                      onPress={() => setVideoArtist(a.id)}
+                    >
+                      <Text style={[styles.artistChipText, videoArtist === a.id && styles.artistChipTextActive]}>{a.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
+            <Button
+              title="Generate Video Storyboard"
+              onPress={async () => {
+                if (!videoLyrics.trim()) { Alert.alert('Error', 'Enter lyrics'); return; }
+                setGeneratingVideo(true);
+                setVideoResult('');
+                try {
+                  const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+                  const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/ai/video-prompts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ lyrics: videoLyrics, style: videoStyle, artist_id: videoArtist, platforms: ['youtube', 'tiktok', 'instagram'] }),
+                  });
+                  if (!res.ok) throw new Error('Failed');
+                  const data = await res.json();
+                  setVideoResult(data.video_prompts);
+                } catch (e: any) { Alert.alert('Error', e.message); }
+                finally { setGeneratingVideo(false); }
+              }}
+              loading={generatingVideo}
+              variant="secondary"
+              style={{ backgroundColor: '#EF4444' }}
+            />
+
+            {videoResult ? (
+              <View style={styles.resultBox}>
+                <View style={styles.resultHeader}>
+                  <Text style={styles.resultLabel}>Video Storyboard:</Text>
+                  <TouchableOpacity onPress={() => copyToClipboard(videoResult)}>
+                    <Ionicons name="copy-outline" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.resultText}>{videoResult}</Text>
+              </View>
+            ) : null}
           </Card>
 
           <View style={styles.bottomPadding} />
