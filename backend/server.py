@@ -975,18 +975,15 @@ Visual Brief: {artist.get('visual_brief', '')}
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"video-{current_user['id']}-{uuid.uuid4()}",
-            system_message=f"""You are an expert music video director and visual storyteller. 
+            system_message=f"""You are an expert music video director who outputs PRODUCTION-READY prompts for AI video generators (Sora, Runway, Kling, Pika).
 {artist_context}
 
-Create detailed scene-by-scene video prompts that:
-1. Follow the emotional arc of the lyrics
-2. Match the artist's visual identity and aesthetic
-3. Include specific visual directions (camera angles, lighting, color grading)
-4. Are formatted for AI video generation tools like Sora or Runway
-5. Adapt to different platform formats when requested
-
-Do NOT reference real artists, directors, or copyrighted works.
-Include timestamps based on typical song structure."""
+CRITICAL RULES:
+- Every scene MUST include a copy-paste ready prompt enclosed in triple backticks
+- Include Sora/Runway specific parameters: shot duration, motion strength (1-10), camera motion type, seed consistency notes
+- Do NOT offer to do more work later — deliver EVERYTHING in this response
+- Do NOT reference real artists, directors, or copyrighted works
+- All prompts must be self-contained and immediately usable"""
         ).with_model("openai", "gpt-5.2")
         
         platform_instructions = ""
@@ -998,22 +995,44 @@ Include timestamps based on typical song structure."""
             elif p == "instagram":
                 platform_instructions += "\n- Instagram Reels (9:16 vertical, 15-90sec, aesthetic focus)"
         
-        prompt = f"""Create a complete music video concept with scene-by-scene prompts for the following lyrics:
+        prompt = f"""Create a complete music video with COPY-PASTE READY prompts for the following lyrics:
 
 {lyrics[:2000]}
 
 {f'Visual style direction: {request.style}' if request.style else ''}
 
-Generate:
-1. **Overall Vision**: 2-3 sentence concept overview
-2. **Scene-by-Scene Storyboard**: 6-10 scenes with:
-   - Timestamp (e.g., 0:00-0:15)
-   - Visual description (what we see)
-   - Camera/movement direction
-   - Mood/lighting
-   - AI generation prompt for that scene
-3. **Platform Adaptations**: Format-specific directions for:{platform_instructions}
-"""
+YOU MUST DELIVER ALL OF THE FOLLOWING — DO NOT SKIP ANY SECTION:
+
+## 1. OVERALL VISION
+2-3 sentence concept overview.
+
+## 2. SCENE-BY-SCENE STORYBOARD (6-10 scenes)
+For EACH scene provide:
+- **Timestamp**: e.g., 0:00-0:15
+- **Lyric line**: Which lyrics play during this scene
+- **Visual description**: What we see
+- **Camera**: Camera angle, movement, framing
+- **Lighting/Color**: Color grading, lighting setup
+- **SORA PROMPT** (in code block, ready to copy-paste):
+```
+[Full prompt text for Sora/Runway. Include: subject, action, environment, camera motion, lighting, style, aspect ratio]
+Duration: Xs | Motion: X/10 | Camera: [type] | Aspect: 16:9 or 9:16
+Seed note: [consistency guidance for maintaining character/scene continuity]
+```
+
+## 3. 60-SECOND TIKTOK CUT SCRIPT
+- Pick the most hook-worthy 60 seconds of the song
+- List exact timestamps and which scenes to use
+- Include text overlay suggestions for maximum retention
+- Provide the TikTok-specific Sora prompts (9:16 vertical) in code blocks
+
+## 4. PLATFORM ADAPTATIONS
+For each platform:{platform_instructions}
+- Aspect ratio and duration recommendations
+- Which scenes work best for each format
+- Re-formatted prompts where aspect ratio changes
+
+DELIVER ALL PROMPTS IN CODE BLOCKS READY TO COPY-PASTE. Do not offer to do additional work — include everything now."""
         
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
