@@ -105,6 +105,7 @@ class ArtistCreate(BaseModel):
     suno_voice: str = ""  # saved Suno voice ID/name for this artist
     suno_exclusions: str = ""  # default exclusions prompt for this artist
     notes: str = ""
+    is_private: bool = False  # if true, only visible to the creator within their team
 
 class Artist(ArtistCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -200,10 +201,12 @@ class IdeaCreate(BaseModel):
     tags: List[str] = []
     linked_artist_id: Optional[str] = None
     linked_song_id: Optional[str] = None
+    is_private: bool = False
 
 class Idea(IdeaCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
+    team_id: str = ""
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
@@ -248,10 +251,12 @@ class CollectionCreate(BaseModel):
     release_date: Optional[str] = None
     status: str = "in_progress"  # in_progress, completed, released
     notes: str = ""
+    is_private: bool = False
 
 class Collection(CollectionCreate):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
+    team_id: str = ""
     track_count: int = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
