@@ -100,6 +100,34 @@ Your personal AI Music Executive — an end-to-end platform to develop fictional
 - Returns: enhancement suggestions per area (Production, Arrangement, Hook, Bridge, Vocals, Mix), alternate Suno styles (NO real-artist names), narrative directions, reference artists for inspiration, roster repositioning, next session plan, and 2-3 sentence executive summary
 - Result auto-saves to the song's AI Prompts Gallery
 
+### 15. Soft Delete + Recently Deleted (NEW)
+- Artists / Songs / Releases / Ideas now soft-delete (set `deleted_at` timestamp) instead of hard-deleting
+- 30-day recovery window
+- Trash page (`/trash`) accessible from Team & Workspace screen
+- Tabs for Songs / Artists / Releases / Ideas with Restore + Delete-Forever buttons (both with double confirmation)
+- Restoring a song re-increments its artist's song count
+- Soft-deleted items are filtered out of all list/detail queries by default
+
+### 16. Background Audio + Bluetooth Car Controls (NEW)
+- `app.json` declares iOS `UIBackgroundModes: ['audio']` and Android `FOREGROUND_SERVICE_MEDIA_PLAYBACK` permission
+- `expo-audio` configured with `shouldPlayInBackground: true` and `playsInSilentMode: true`
+- MediaSession API wired up on web/PWA/iOS Safari for play/pause/next/prev/seek from lock screen + bluetooth car displays
+- Mini player updates `mediaSession.metadata` (title, artist, artwork) and `playbackState` (playing/paused)
+- ⚠️ Full native lock-screen / Android Auto / CarPlay integration requires building with expo-dev-client (development build) — Expo Go doesn't expose those native APIs
+
+### 17. Playlists separate from Releases (NEW)
+- Releases tab now has a **Releases / Playlists** toggle at the top
+- Counts displayed in each tab
+- New playlists default to `collection_type: 'Playlist'`
+- Independent search, independent empty state ("Curate songs across artists into themed playlists for testing in your car")
+- Playlists vs releases are filtered automatically based on `collection_type`
+
+### 18. Activity Timeline (NEW)
+- Every song detail screen shows a chronological activity log: who created/updated/deleted/played/commented on the song and when
+- Backend `activities` collection logs every CRUD action via `log_activity()` helper
+- Endpoint `GET /api/songs/{id}/activity` and team-wide `GET /api/activity/recent`
+- Timeline auto-collapses at 5 items with "Show all N" expansion
+
 ## Tech Stack
 - **Frontend:** Expo Router (React Native + Web), Zustand state, Pressable for cross-platform clickability, expo-image-picker, expo-clipboard.
 - **Backend:** FastAPI + Motor (MongoDB async).

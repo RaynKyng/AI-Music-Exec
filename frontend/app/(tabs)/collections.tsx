@@ -15,7 +15,7 @@ import { useDataStore } from '../../src/stores/dataStore';
 import { colors, spacing } from '../../src/utils/theme';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-const COLL_TYPES = ['EP', 'LP', 'Single', 'Album'];
+const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
 
 export default function CollectionsScreen() {
   const router = useRouter();
@@ -26,6 +26,7 @@ export default function CollectionsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [form, setForm] = useState({ title: '', artist_id: '', collection_type: 'EP', description: '', cover_image_url: '', status: 'in_progress', notes: '' });
   const [saving, setSaving] = useState(false);
+  const [activeView, setActiveView] = useState<'releases' | 'playlists'>('releases');
 
   useEffect(() => { fetchArtists(); loadCollections(); }, []);
 
@@ -69,36 +70,52 @@ export default function CollectionsScreen() {
 
   const getArtistName = (id: string) => artists.find(a => a.id === id)?.name || 'Unknown';
 
-  const filtered = search ? collections.filter(c =>
-    c.title.toLowerCase().includes(search.toLowerCase()) ||
-    getArtistName(c.artist_id).toLowerCase().includes(search.toLowerCase())
-  ) : collections;
-
   const statusColor = (s: string) => s === 'released' ? colors.primary : s === 'completed' ? colors.success : colors.warning;
+
+  const isPlaylist = (c: any) => (c.collection_type || '').toLowerCase() === 'playlist';
+  const filteredByView = collections.filter(c => activeView === 'playlists' ? isPlaylist(c) : !isPlaylist(c));
+  const filtered = filteredByView.filter(c => !search || c.title.toLowerCase().includes(search.toLowerCase()) || getArtistName(c.artist_id).toLowerCase().includes(search.toLowerCase()));
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Releases</Text>
-        <Pressable testID="add-collection-btn" style={styles.addButton} onPress={() => setModalVisible(true)}>
+        <Text style={styles.title}>{activeView === 'playlists' ? 'Playlists' : 'Releases'}</Text>
+        <Pressable testID="add-collection-btn" style={styles.addButton} onPress={() => {
+          setForm({ ...form, collection_type: activeView === 'playlists' ? 'Playlist' : 'EP' });
+          setModalVisible(true);
+        }}>
           <Ionicons name="add" size={24} color={colors.text} />
         </Pressable>
       </View>
 
+      <View style={styles.viewToggle}>
+        <Pressable style={[styles.toggleChip, activeView === 'releases' && styles.toggleChipActive]} onPress={() => setActiveView('releases')}>
+          <Ionicons name="albums" size={14} color={activeView === 'releases' ? colors.text : colors.textSecondary} />
+          <Text style={[styles.toggleText, activeView === 'releases' && styles.toggleTextActive]}>Releases ({collections.filter(c => !isPlaylist(c)).length})</Text>
+        </Pressable>
+        <Pressable style={[styles.toggleChip, activeView === 'playlists' && styles.toggleChipActive]} onPress={() => setActiveView('playlists')}>
+          <Ionicons name="list" size={14} color={activeView === 'playlists' ? colors.text : colors.textSecondary} />
+          <Text style={[styles.toggleText, activeView === 'playlists' && styles.toggleTextActive]}>Playlists ({collections.filter(c => isPlaylist(c)).length})</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.searchWrap}>
-        <SearchBar value={search} onChangeText={setSearch} placeholder="Search releases..." />
+        <SearchBar value={search} onChangeText={setSearch} placeholder={activeView === 'playlists' ? 'Search playlists...' : 'Search releases...'} />
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
         {filtered.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="albums-outline" size={64} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No Releases Yet</Text>
-            <Text style={styles.emptyText}>Organize songs into EPs, LPs, and Albums</Text>
-            <Pressable style={styles.emptyButton} onPress={() => setModalVisible(true)}>
+            <Ionicons name={activeView === 'playlists' ? 'list-outline' : 'albums-outline'} size={64} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>{activeView === 'playlists' ? 'No Playlists Yet' : 'No Releases Yet'}</Text>
+            <Text style={styles.emptyText}>{activeView === 'playlists' ? 'Curate songs across artists into themed playlists for testing in your car.' : 'Organize songs into EPs, LPs, and Albums.'}</Text>
+            <Pressable style={styles.emptyButton} onPress={() => {
+              setForm({ ...form, collection_type: activeView === 'playlists' ? 'Playlist' : 'EP' });
+              setModalVisible(true);
+            }}>
               <Ionicons name="add" size={20} color={colors.text} />
-              <Text style={styles.emptyButtonText}>New Release</Text>
+              <Text style={styles.emptyButtonText}>{activeView === 'playlists' ? 'New Playlist' : 'New Release'}</Text>
             </Pressable>
           </View>
         ) : (
@@ -178,6 +195,11 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  viewToggle: { flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.sm, marginBottom: spacing.sm },
+  toggleChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+  toggleChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  toggleText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  toggleTextActive: { color: colors.text, fontWeight: '700' },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg, paddingTop: 0 },
   emptyState: { alignItems: 'center', paddingTop: 80 },

@@ -727,6 +727,8 @@ export default function SongDetailScreen() {
                 )}
               </Card>
 
+              <ActivityTimelineCard songId={id!} />
+
               {/* Quick Actions */}
               <View style={styles.actionRow}>
                 <Pressable style={styles.actionBtn} onPress={() => router.push(`/song/share/${id}`)}>
@@ -891,6 +893,78 @@ export default function SongDetailScreen() {
         />
       </Modal>
     </SafeAreaView>
+  );
+}
+
+function ActivityTimelineCard({ songId }: { songId: string }) {
+  const [activities, setActivities] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+        const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${songId}/activity`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) setActivities(await res.json());
+      } catch {}
+      setLoading(false);
+    })();
+  }, [songId]);
+
+  if (loading) return null;
+  if (activities.length === 0) return null;
+
+  const fmtTime = (iso: string) => {
+    try {
+      const d = new Date(iso);
+      const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+      if (diff < 60) return `${diff}s ago`;
+      if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+      if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+      if (diff < 604800) return `${Math.floor(diff/86400)}d ago`;
+      return d.toLocaleDateString();
+    } catch { return ''; }
+  };
+
+  const iconFor = (action: string) => {
+    if (action === 'created') return 'add-circle';
+    if (action === 'updated') return 'create';
+    if (action === 'deleted') return 'trash';
+    if (action === 'played') return 'play-circle';
+    if (action === 'commented') return 'chatbubble';
+    return 'ellipse';
+  };
+
+  const visible = expanded ? activities : activities.slice(0, 5);
+
+  return (
+    <Card style={styles.section}>
+      <View style={styles.sectionHeaderRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Activity ({activities.length})</Text>
+          <Text style={styles.sectionSub}>Edits, plays, and team activity for this song.</Text>
+        </View>
+      </View>
+      {visible.map((a, i) => (
+        <View key={a.id || i} style={styles.activityRow}>
+          <Ionicons name={iconFor(a.action) as any} size={16} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.activityText}>
+              <Text style={{ fontWeight: '700' }}>{a.user_name || 'Someone'}</Text> {a.action} this song
+            </Text>
+            <Text style={styles.activityTime}>{fmtTime(a.created_at)}</Text>
+          </View>
+        </View>
+      ))}
+      {activities.length > 5 && (
+        <Pressable onPress={() => setExpanded(!expanded)} style={styles.expandBtn}>
+          <Text style={styles.expandText}>{expanded ? 'Show less' : `Show all ${activities.length}`}</Text>
+        </Pressable>
+      )}
+    </Card>
   );
 }
 
@@ -1156,6 +1230,11 @@ const styles = StyleSheet.create({
   authorshipChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
   authorshipChipTextActive: { color: colors.text },
   playInlineBtn: { padding: 2 },
+  activityRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border },
+  activityText: { fontSize: 13, color: colors.text, lineHeight: 18 },
+  activityTime: { fontSize: 10, color: colors.textMuted, marginTop: 2 },
+  expandBtn: { alignItems: 'center', paddingVertical: spacing.sm },
+  expandText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   label: {
     fontSize: 14,
     fontWeight: '600',

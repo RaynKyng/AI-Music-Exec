@@ -807,6 +807,7 @@ async def create_song(song_data: SongCreate, current_user: dict = Depends(get_cu
         )
     
     await db.songs.insert_one(song_dict)
+    await log_activity(current_user, "created", "song", song_dict["id"], {"title": song_dict["title"]})
     return Song(**song_dict)
 
 @api_router.get("/songs", response_model=List[Song])
@@ -861,6 +862,7 @@ async def update_song(song_id: str, song_data: SongCreate, current_user: dict = 
     
     await db.songs.update_one({"id": song_id}, {"$set": update_dict})
     updated = await db.songs.find_one({"id": song_id})
+    await log_activity(current_user, "updated", "song", song_id, {"title": updated.get("title", "")})
     return Song(**updated)
 
 @api_router.delete("/songs/{song_id}")
@@ -880,6 +882,7 @@ async def delete_song(song_id: str, current_user: dict = Depends(get_current_use
         {"id": song_id},
         {"$set": {"deleted_at": datetime.utcnow(), "deleted_by_id": current_user["id"]}}
     )
+    await log_activity(current_user, "deleted", "song", song_id, {"title": song.get("title", "")})
     return {"message": "Song moved to trash. Restore from Trash within 30 days."}
 
 # Add version to song
@@ -1695,6 +1698,64 @@ async def permanent_delete_trash_item(type_name: str, item_id: str, current_user
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Not found in trash")
     return {"message": f"Permanently deleted"}
+
+# ============== Activity Timeline ==============
+
+async def log_activity(current_user: dict, action: str, target_type: str, target_id: str, details: dict = None):
+    """Log an activity to the timeline. Fire-and-forget pattern."""
+    try:
+        await db.activities.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["id"],
+            "user_name": current_user.get("name", ""),
+            "team_id": current_user.get("team_id", current_user["id"]),
+            "action": action,  # created, updated, deleted, played, commented, generated, prompted, version_added, etc.
+            "target_type": target_type,  # song, artist, collection, idea
+            "target_id": target_id,
+            "details": details or {},
+            "created_at": datetime.utcnow(),
+        })
+    except Exception as e:
+        logger.error(f"Activity log failed: {e}")
+
+@api_router.get("/songs/{song_id}/activity")
+async def get_song_activity(song_id: str, current_user: dict = Depends(get_current_user)):
+    song = await db.songs.find_one(team_query(current_user, {"id": song_id}))
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    activities = await db.activities.find({
+        "team_id": current_user.get("team_id", current_user["id"]),
+        "target_type": "song",
+        "target_id": song_id,
+    }).sort("created_at", -1).limit(100).to_list(100)
+    for a in activities:
+        a.pop("_id", None)
+        if isinstance(a.get("created_at"), datetime):
+            a["created_at"] = a["created_at"].isoformat()
+    return activities
+
+@api_router.get("/activity/recent")
+async def get_recent_activity(limit: int = 50, current_user: dict = Depends(get_current_user)):
+    """Recent team-wide activity feed."""
+    activities = await db.activities.find({
+        "team_id": current_user.get("team_id", current_user["id"]),
+    }).sort("created_at", -1).limit(min(limit, 200)).to_list(200)
+    for a in activities:
+        a.pop("_id", None)
+        if isinstance(a.get("created_at"), datetime):
+            a["created_at"] = a["created_at"].isoformat()
+    return activities
+
+class PlayLogRequest(BaseModel):
+    song_id: str
+
+@api_router.post("/activity/log-play")
+async def log_play(data: PlayLogRequest, current_user: dict = Depends(get_current_user)):
+    song = await db.songs.find_one(team_query(current_user, {"id": data.song_id}))
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    await log_activity(current_user, "played", "song", data.song_id, {"title": song.get("title", "")})
+    return {"ok": True}
 
 @api_router.get("/collections/{coll_id}/songs", response_model=List[Song])
 async def get_collection_songs(coll_id: str, current_user: dict = Depends(get_current_user)):

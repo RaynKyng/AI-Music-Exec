@@ -9,14 +9,31 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.musicexec.aimusicmanager",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"],
+        "NSCameraUsageDescription": "Capture photos for artist references and album art",
+        "NSPhotoLibraryUsageDescription": "Pick artist references and album art from photos",
+        "NSMicrophoneUsageDescription": "Record voice memos for songs",
+        "NSDocumentsFolderUsageDescription": "Upload audio files for in-app playback"
+      }
     },
     "android": {
+      "package": "com.musicexec.aimusicmanager",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "WAKE_LOCK",
+        "READ_MEDIA_AUDIO",
+        "READ_MEDIA_IMAGES",
+        "INTERNET"
+      ]
     },
     "web": {
       "bundler": "metro",

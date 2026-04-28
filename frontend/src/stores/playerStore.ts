@@ -43,16 +43,55 @@ interface PlayerState {
 let webAudio: HTMLAudioElement | null = null;
 // Native audio implementation
 let nativePlayer: any = null;
+let audioModeConfigured = false;
 
 const isWeb = Platform.OS === 'web';
+
+// Configure native audio for background playback (lock screen + bluetooth car controls)
+const ensureNativeAudioMode = async () => {
+  if (isWeb || audioModeConfigured) return;
+  try {
+    const { setAudioModeAsync } = await import('expo-audio');
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+      shouldRouteThroughEarpiece: false,
+      interruptionMode: 'duckOthers',
+    });
+    audioModeConfigured = true;
+  } catch (e) {
+    console.warn('Could not set background audio mode:', e);
+  }
+};
 
 const ensureWebAudio = () => {
   if (typeof window === 'undefined') return null;
   if (!webAudio) {
     webAudio = new Audio();
     webAudio.preload = 'metadata';
+    // MediaSession API for browser/PWA media controls (some browsers expose to bluetooth)
+    if ('mediaSession' in navigator) {
+      // handlers set when track loads
+    }
   }
   return webAudio;
+};
+
+const updateMediaSession = (track: Track | null, isPlaying: boolean) => {
+  if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+  if (!track) {
+    (navigator as any).mediaSession.metadata = null;
+    return;
+  }
+  try {
+    (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
+      title: track.title || 'Untitled',
+      artist: track.artist || '',
+      album: 'AI Music Manager',
+      artwork: track.artwork ? [{ src: track.artwork, sizes: '512x512', type: 'image/jpeg' }] : [],
+    });
+    (navigator as any).mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+  } catch {}
 };
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
@@ -106,6 +145,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     } else {
       set({ queue: [track], queueIndex: 0 });
     }
+
+    // Configure media session (lock screen / bluetooth controls on web/PWA + iOS Safari)
+    updateMediaSession(track, true);
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        (navigator as any).mediaSession.setActionHandler('play', () => get().resume());
+        (navigator as any).mediaSession.setActionHandler('pause', () => get().pause());
+        (navigator as any).mediaSession.setActionHandler('previoustrack', () => get().prev());
+        (navigator as any).mediaSession.setActionHandler('nexttrack', () => get().next());
+        (navigator as any).mediaSession.setActionHandler('seekto', (e: any) => { if (e.seekTime != null) get().seek(e.seekTime * 1000); });
+      } catch {}
+    }
+
+    // Ensure native audio is configured for background playback
+    if (!isWeb) await ensureNativeAudioMode();
 
     try {
       if (isWeb) {
@@ -185,6 +239,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       try { await nativePlayer.pause(); } catch {}
     }
     set({ isPlaying: false });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try { (navigator as any).mediaSession.playbackState = 'paused'; } catch {}
+    }
   },
 
   resume: async () => {
@@ -192,6 +249,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       try { await ensureWebAudio()?.play(); set({ isPlaying: true }); } catch {}
     } else if (nativePlayer) {
       try { await nativePlayer.play(); set({ isPlaying: true }); } catch {}
+    }
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try { (navigator as any).mediaSession.playbackState = 'playing'; } catch {}
     }
   },
 
