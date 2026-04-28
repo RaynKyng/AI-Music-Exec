@@ -100,32 +100,41 @@ export default function SongDetailScreen() {
       const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) { setLoading(false); return; }
+      if (!res.ok) {
+        setLoading(false);
+        Alert.alert('Song unavailable', 'This song could not be loaded. It may have been deleted or you don\u2019t have access to it.', [
+          { text: 'Go back', onPress: () => router.back() },
+        ]);
+        return;
+      }
       const song = await res.json();
       setForm({
-        title: song.title,
-        artist_id: song.artist_id,
+        title: song.title || '',
+        artist_id: song.artist_id || null,
         featured_artist_ids: song.featured_artist_ids || [],
         collection_id: song.collection_id || null,
-        lyrics: song.lyrics,
+        lyrics: song.lyrics || '',
         authorship: song.authorship || 'original',
-        style_prompt: song.style_prompt,
+        style_prompt: song.style_prompt || '',
         style_secondary: song.style_secondary || '',
         style_alternate: song.style_alternate || '',
         exclusions: song.exclusions || '',
-        genre: song.genre,
-        mood: song.mood,
-        tempo: song.tempo,
+        genre: song.genre || '',
+        mood: song.mood || '',
+        tempo: song.tempo || '',
         themes: song.themes || [],
-        status: song.status,
-        notes: song.notes,
+        status: song.status || 'draft',
+        notes: song.notes || '',
         todo: song.todo || [],
         versions: song.versions || [],
         suno_generations: song.suno_generations || [],
         saved_prompts: song.saved_prompts || [],
         track_number: song.track_number || 0,
       });
-    } catch { /* ignore */ }
+    } catch (e) {
+      console.error('Failed to load song:', e);
+      Alert.alert('Network error', 'Could not load song. Please check your connection.');
+    }
     setLoading(false);
   };
 
@@ -284,8 +293,6 @@ export default function SongDetailScreen() {
               </Text>
             )}
 
-            <Text style={styles.label}>Status</Text>
-
             {/* Collection picker */}
             <Text style={styles.label}>Release / Project</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
@@ -336,6 +343,22 @@ export default function SongDetailScreen() {
 
           <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Lyrics</Text>
+            <View style={styles.authorshipRow}>
+              <Text style={styles.authorshipLabel}>Authorship:</Text>
+              {[
+                { key: 'original', label: 'I wrote it', icon: 'person' },
+                { key: 'collab', label: 'AI co-write', icon: 'people' },
+                { key: 'ai_generated', label: 'AI-generated', icon: 'sparkles' },
+              ].map((opt) => (
+                <Pressable
+                  key={opt.key}
+                  onPress={() => setForm({ ...form, authorship: opt.key })}
+                  style={[styles.authorshipChip, form.authorship === opt.key && styles.authorshipChipActive]}>
+                  <Ionicons name={opt.icon as any} size={12} color={form.authorship === opt.key ? colors.text : colors.textSecondary} />
+                  <Text style={[styles.authorshipChipText, form.authorship === opt.key && styles.authorshipChipTextActive]}>{opt.label}</Text>
+                </Pressable>
+              ))}
+            </View>
             <Input
               placeholder="Enter song lyrics..."
               value={form.lyrics}
@@ -944,6 +967,12 @@ const styles = StyleSheet.create({
   promptIcon: { padding: 4 },
   promptContent: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   promptMeta: { fontSize: 10, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  authorshipRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  authorshipLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+  authorshipChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surfaceLight, borderWidth: 1, borderColor: colors.border },
+  authorshipChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  authorshipChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
+  authorshipChipTextActive: { color: colors.text },
   label: {
     fontSize: 14,
     fontWeight: '600',
