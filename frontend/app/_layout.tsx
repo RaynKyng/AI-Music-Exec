@@ -5,9 +5,11 @@ import { View, StyleSheet } from 'react-native';
 import { useAuthStore } from '../src/stores/authStore';
 import { MiniPlayer } from '../src/components/MiniPlayer';
 import { colors } from '../src/utils/theme';
+import { usePushNotifications } from '../src/utils/pushNotifications';
 
 export default function RootLayout() {
   const loadAuth = useAuthStore((state) => state.loadAuth);
+  usePushNotifications();
 
   useEffect(() => {
     loadAuth();

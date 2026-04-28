@@ -63,6 +63,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    try {
+      const { clearPushTokenOnLogout } = await import('../utils/pushNotifications');
+      await clearPushTokenOnLogout();
+    } catch {}
     await AsyncStorage.multiRemove(['token', 'user']);
     set({ user: null, token: null, isAuthenticated: false, didLogout: true });
   },

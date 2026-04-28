@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 import jwt
 from passlib.context import CryptContext
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import push_service
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -505,6 +506,45 @@ async def leave_team(current_user: dict = Depends(get_current_user)):
     )
     return {"message": "Left team. You're back in your personal workspace."}
 
+# ============== Push Notifications ==============
+
+class PushTokenRequest(BaseModel):
+    push_token: str
+    platform: str = "android"
+
+@api_router.post("/users/push-token")
+async def register_push_token(data: PushTokenRequest, current_user: dict = Depends(get_current_user)):
+    """Register a device's Expo push token for the current user."""
+    if not data.push_token:
+        raise HTTPException(status_code=400, detail="push_token required")
+    ok = await push_service.upsert_push_token(
+        db, current_user["id"], data.push_token, data.platform or "android"
+    )
+    return {"ok": True, "stored": ok}
+
+@api_router.delete("/users/push-token")
+async def unregister_push_token(data: PushTokenRequest, current_user: dict = Depends(get_current_user)):
+    """Unregister a device's push token (e.g. on logout)."""
+    if not data.push_token:
+        raise HTTPException(status_code=400, detail="push_token required")
+    await push_service.remove_push_token(db, current_user["id"], data.push_token)
+    return {"ok": True}
+
+@api_router.post("/notifications/test")
+async def send_test_notification(current_user: dict = Depends(get_current_user)):
+    """Send a test push notification to ALL of the current user's registered devices."""
+    user = await db.users.find_one({"id": current_user["id"]})
+    tokens = [t.get("token") for t in (user.get("expo_push_tokens") or []) if t.get("token")]
+    if not tokens:
+        raise HTTPException(status_code=400, detail="No push tokens registered for this user. Open the app on your phone (in a dev build) to register.")
+    sent = await push_service.send_push(
+        tokens,
+        "AI Music Exec",
+        "Push notifications are working! 🎵",
+        data={"url": "/"},
+    )
+    return {"ok": True, "sent": sent, "tokens": len(tokens)}
+
 # ============== Artist Routes ==============
 
 @api_router.post("/artists", response_model=Artist)
@@ -860,9 +900,16 @@ async def update_song(song_id: str, song_data: SongCreate, current_user: dict = 
     update_dict = song_data.dict()
     update_dict["updated_at"] = datetime.utcnow()
     
+    status_changed = song.get("status") != update_dict.get("status")
+    
     await db.songs.update_one({"id": song_id}, {"$set": update_dict})
     updated = await db.songs.find_one({"id": song_id})
-    await log_activity(current_user, "updated", "song", song_id, {"title": updated.get("title", "")})
+    activity_details = {"title": updated.get("title", "")}
+    if status_changed:
+        activity_details["status_changed"] = True
+        activity_details["new_status"] = update_dict.get("status", "")
+        activity_details["old_status"] = song.get("status", "")
+    await log_activity(current_user, "updated", "song", song_id, activity_details)
     return Song(**updated)
 
 @api_router.delete("/songs/{song_id}")
@@ -919,6 +966,7 @@ async def create_idea(idea_data: IdeaCreate, current_user: dict = Depends(get_cu
     idea_dict["updated_at"] = datetime.utcnow()
     
     await db.ideas.insert_one(idea_dict)
+    await log_activity(current_user, "created", "idea", idea_dict["id"], {"title": idea_dict.get("title", "")})
     return Idea(**idea_dict)
 
 @api_router.get("/ideas", response_model=List[Idea])
@@ -1702,7 +1750,8 @@ async def permanent_delete_trash_item(type_name: str, item_id: str, current_user
 # ============== Activity Timeline ==============
 
 async def log_activity(current_user: dict, action: str, target_type: str, target_id: str, details: dict = None):
-    """Log an activity to the timeline. Fire-and-forget pattern."""
+    """Log an activity to the timeline. Fire-and-forget pattern.
+    Also dispatches push notifications to teammates for notable actions."""
     try:
         await db.activities.insert_one({
             "id": str(uuid.uuid4()),
@@ -1717,6 +1766,61 @@ async def log_activity(current_user: dict, action: str, target_type: str, target
         })
     except Exception as e:
         logger.error(f"Activity log failed: {e}")
+
+    # Dispatch push notifications to teammates (fire and forget) for notable actions
+    try:
+        team_id = current_user.get("team_id", current_user["id"])
+        # Solo workspace? skip notifications.
+        team_size = await db.users.count_documents({"team_id": team_id})
+        if team_size <= 1:
+            return
+
+        notifiable = {"created", "updated", "commented", "generated", "version_added", "prompted", "reanalyzed"}
+        if action not in notifiable:
+            return
+        # Skip noisy events (plays, simple updates without meaningful change indicators).
+        if action == "updated" and not (details and (details.get("status_changed") or details.get("title"))):
+            # We still allow generic update notifications but prefer status changes.
+            pass
+
+        actor = current_user.get("name") or "A teammate"
+        title_text = (details or {}).get("title") or ""
+        type_label = {"song": "song", "artist": "artist", "collection": "collection", "idea": "idea"}.get(target_type, "item")
+
+        verb_map = {
+            "created": "added a new",
+            "updated": "updated",
+            "commented": "commented on",
+            "generated": "generated content for",
+            "version_added": "added a version to",
+            "prompted": "saved a new AI prompt for",
+            "reanalyzed": "re-analyzed",
+        }
+        verb = verb_map.get(action, action)
+
+        # Special-case status changes for songs
+        if action == "updated" and (details or {}).get("status_changed"):
+            new_status = (details or {}).get("new_status") or ""
+            body = f'{actor} moved "{title_text or "a song"}" to {new_status}'
+        else:
+            body = f'{actor} {verb} {type_label}'
+            if title_text:
+                body += f': "{title_text}"'
+
+        await push_service.notify_team(
+            db,
+            team_id,
+            title="AI Music Exec",
+            body=body,
+            exclude_user_id=current_user["id"],
+            data={
+                "target_type": target_type,
+                "target_id": target_id,
+                "action": action,
+            },
+        )
+    except Exception as e:
+        logger.warning(f"Push notify on activity failed: {e}")
 
 @api_router.get("/songs/{song_id}/activity")
 async def get_song_activity(song_id: str, current_user: dict = Depends(get_current_user)):
@@ -2273,6 +2377,7 @@ Return ONLY this JSON:
             {"id": song_id},
             {"$push": {"saved_prompts": prompt_record}, "$set": {"updated_at": datetime.utcnow()}}
         )
+        await log_activity(current_user, "reanalyzed", "song", song_id, {"title": song.get("title", "")})
         
         return {"analysis": result, "saved_prompt": prompt_record}
     except Exception as e:
@@ -2410,6 +2515,20 @@ async def create_comment(data: CommentCreate, current_user: dict = Depends(get_c
     d["author_name"] = current_user.get("name", "Unknown")
     d["created_at"] = datetime.utcnow()
     await db.comments.insert_one(d)
+    # Log + notify teammates (e.g. "Music Exec commented on song: 'Title'")
+    try:
+        target_title = ""
+        if d.get("target_type") in {"song", "artist", "collection", "idea"}:
+            coll = {"song": "songs", "artist": "artists", "collection": "collections", "idea": "ideas"}[d["target_type"]]
+            doc = await db[coll].find_one({"id": d["target_id"]})
+            if doc:
+                target_title = doc.get("title") or doc.get("name") or ""
+        await log_activity(
+            current_user, "commented", d.get("target_type", "song"), d.get("target_id", ""),
+            {"title": target_title, "preview": (d.get("text") or "")[:80]}
+        )
+    except Exception:
+        pass
     return Comment(**d)
 
 @api_router.get("/comments")
