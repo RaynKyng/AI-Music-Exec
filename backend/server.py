@@ -342,8 +342,9 @@ async def get_team_user_ids(current_user: dict) -> List[str]:
         ids.append(current_user["id"])
     return ids
 
-def team_query(current_user: dict, base: dict = None) -> dict:
-    """Build a query that filters records to the user's current team workspace, excluding others' private items."""
+def team_query(current_user: dict, base: dict = None, include_deleted: bool = False) -> dict:
+    """Build a query that filters records to the user's current team workspace, excluding others' private items.
+    By default, soft-deleted items (with deleted_at field set) are excluded."""
     q = dict(base or {})
     team_id = current_user.get("team_id") or current_user["id"]
     q["team_id"] = team_id
@@ -356,6 +357,8 @@ def team_query(current_user: dict, base: dict = None) -> dict:
         q["$and"] = q["$and"] + [privacy_clause]
     else:
         q.update(privacy_clause)
+    if not include_deleted:
+        q["deleted_at"] = {"$in": [None, ""]}  # null or missing
     return q
 
 async def team_filter(current_user: dict, base_query: dict = None) -> dict:
@@ -776,10 +779,14 @@ async def update_artist(artist_id: str, artist_data: ArtistCreate, current_user:
 
 @api_router.delete("/artists/{artist_id}")
 async def delete_artist(artist_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.artists.delete_one(team_query(current_user, {"id": artist_id}))
-    if result.deleted_count == 0:
+    artist = await db.artists.find_one(team_query(current_user, {"id": artist_id}))
+    if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
-    return {"message": "Artist deleted"}
+    await db.artists.update_one(
+        {"id": artist_id},
+        {"$set": {"deleted_at": datetime.utcnow(), "deleted_by_id": current_user["id"]}}
+    )
+    return {"message": "Artist moved to trash. Restore from Trash within 30 days."}
 
 # ============== Song Routes ==============
 
@@ -862,15 +869,18 @@ async def delete_song(song_id: str, current_user: dict = Depends(get_current_use
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
     
-    # Update artist song count
+    # Decrement artist song count
     if song.get("artist_id"):
         await db.artists.update_one(
             {"id": song["artist_id"]},
             {"$inc": {"song_count": -1}}
         )
     
-    await db.songs.delete_one({"id": song_id})
-    return {"message": "Song deleted"}
+    await db.songs.update_one(
+        {"id": song_id},
+        {"$set": {"deleted_at": datetime.utcnow(), "deleted_by_id": current_user["id"]}}
+    )
+    return {"message": "Song moved to trash. Restore from Trash within 30 days."}
 
 # Add version to song
 @api_router.post("/songs/{song_id}/versions", response_model=Song)
@@ -954,10 +964,14 @@ async def update_idea(idea_id: str, idea_data: IdeaCreate, current_user: dict = 
 
 @api_router.delete("/ideas/{idea_id}")
 async def delete_idea(idea_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.ideas.delete_one(team_query(current_user, {"id": idea_id}))
-    if result.deleted_count == 0:
+    idea = await db.ideas.find_one(team_query(current_user, {"id": idea_id}))
+    if not idea:
         raise HTTPException(status_code=404, detail="Idea not found")
-    return {"message": "Idea deleted"}
+    await db.ideas.update_one(
+        {"id": idea_id},
+        {"$set": {"deleted_at": datetime.utcnow(), "deleted_by_id": current_user["id"]}}
+    )
+    return {"message": "Idea moved to trash"}
 
 # ============== Distribution Routes ==============
 
@@ -1608,12 +1622,79 @@ async def update_collection(coll_id: str, data: CollectionCreate, current_user: 
 
 @api_router.delete("/collections/{coll_id}")
 async def delete_collection(coll_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.collections.delete_one(team_query(current_user, {"id": coll_id}))
-    if result.deleted_count == 0:
+    c = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
+    if not c:
         raise HTTPException(status_code=404, detail="Collection not found")
-    # Unlink songs
-    await db.songs.update_many({"collection_id": coll_id}, {"$set": {"collection_id": None}})
-    return {"message": "Collection deleted"}
+    await db.collections.update_one(
+        {"id": coll_id},
+        {"$set": {"deleted_at": datetime.utcnow(), "deleted_by_id": current_user["id"]}}
+    )
+    return {"message": "Release moved to trash"}
+
+# ============== Trash / Restore ==============
+
+@api_router.get("/trash")
+async def get_trash(current_user: dict = Depends(get_current_user)):
+    """Return all soft-deleted records belonging to the current team, grouped by type."""
+    team_id = current_user.get("team_id", current_user["id"])
+    cutoff = datetime.utcnow() - timedelta(days=30)
+    out = {"artists": [], "songs": [], "collections": [], "ideas": []}
+    for coll_name, type_key in [("artists", "artists"), ("songs", "songs"), ("collections", "collections"), ("ideas", "ideas")]:
+        records = await db[coll_name].find({
+            "team_id": team_id,
+            "deleted_at": {"$gte": cutoff, "$ne": None},
+        }).sort("deleted_at", -1).to_list(200)
+        for r in records:
+            r.pop("_id", None)
+            # Don't show others' private items
+            if r.get("is_private") and r.get("user_id") != current_user["id"]:
+                continue
+            # ISO format the datetime for serialization
+            if isinstance(r.get("deleted_at"), datetime):
+                r["deleted_at"] = r["deleted_at"].isoformat()
+            if isinstance(r.get("created_at"), datetime):
+                r["created_at"] = r["created_at"].isoformat()
+            if isinstance(r.get("updated_at"), datetime):
+                r["updated_at"] = r["updated_at"].isoformat()
+            out[type_key].append(r)
+    return out
+
+@api_router.post("/trash/{type_name}/{item_id}/restore")
+async def restore_trash_item(type_name: str, item_id: str, current_user: dict = Depends(get_current_user)):
+    valid = {"artists", "songs", "collections", "ideas"}
+    if type_name not in valid:
+        raise HTTPException(status_code=400, detail=f"Invalid type. Must be one of: {valid}")
+    coll = db[type_name]
+    item = await coll.find_one({
+        "id": item_id,
+        "team_id": current_user.get("team_id", current_user["id"]),
+        "deleted_at": {"$ne": None},
+    })
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found in trash")
+    await coll.update_one(
+        {"id": item_id},
+        {"$unset": {"deleted_at": "", "deleted_by_id": ""}, "$set": {"updated_at": datetime.utcnow()}}
+    )
+    # If restoring a song, re-increment artist count
+    if type_name == "songs" and item.get("artist_id"):
+        await db.artists.update_one({"id": item["artist_id"]}, {"$inc": {"song_count": 1}})
+    return {"message": f"{type_name[:-1].title()} restored"}
+
+@api_router.delete("/trash/{type_name}/{item_id}/permanent")
+async def permanent_delete_trash_item(type_name: str, item_id: str, current_user: dict = Depends(get_current_user)):
+    valid = {"artists", "songs", "collections", "ideas"}
+    if type_name not in valid:
+        raise HTTPException(status_code=400, detail="Invalid type")
+    coll = db[type_name]
+    result = await coll.delete_one({
+        "id": item_id,
+        "team_id": current_user.get("team_id", current_user["id"]),
+        "deleted_at": {"$ne": None},
+    })
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Not found in trash")
+    return {"message": f"Permanently deleted"}
 
 @api_router.get("/collections/{coll_id}/songs", response_model=List[Song])
 async def get_collection_songs(coll_id: str, current_user: dict = Depends(get_current_user)):

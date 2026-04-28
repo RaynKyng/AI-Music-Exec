@@ -8,6 +8,7 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDataStore } from '../../src/stores/dataStore';
+import { usePlayerStore } from '../../src/stores/playerStore';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
@@ -198,7 +199,37 @@ export default function CollectionDetailScreen() {
           {/* Tracklist */}
           {!isNew && (
             <Card style={styles.section}>
-              <Text style={styles.sectionTitle}>Tracklist ({tracks.length})</Text>
+              <View style={styles.tracklistHeader}>
+                <Text style={[styles.sectionTitle, { marginBottom: 0, flex: 1 }]}>Tracklist ({tracks.length})</Text>
+                {tracks.length > 0 && (
+                  <Pressable
+                    style={styles.playAllBtn}
+                    onPress={() => {
+                      const playable = tracks.map((s, idx) => {
+                        const url = s.suno_generations?.[0]?.audio_url || s.suno_generations?.[0]?.suno_url || s.versions?.find((v: any) => v.audio_url || v.suno_link)?.audio_url || s.versions?.find((v: any) => v.audio_url || v.suno_link)?.suno_link;
+                        if (!url) return null;
+                        const fullUrl = url.startsWith('/api/') ? `${process.env.EXPO_PUBLIC_BACKEND_URL}${url}` : url;
+                        return {
+                          id: `${s.id}-tracklist`,
+                          url: fullUrl,
+                          title: s.title,
+                          artist: artists.find((a: any) => a.id === s.artist_id)?.name || '',
+                          source: 'song' as const,
+                          source_id: s.id,
+                        };
+                      }).filter(Boolean) as any[];
+                      if (playable.length === 0) {
+                        Alert.alert('No playable audio', 'None of these songs have audio URLs yet. Add a Suno generation with an audio URL or upload an audio file.');
+                        return;
+                      }
+                      usePlayerStore.getState().play(playable[0], playable);
+                    }}>
+                    <Ionicons name="play" size={14} color={colors.text} />
+                    <Text style={styles.playAllText}>Play All</Text>
+                  </Pressable>
+                )}
+              </View>
+              <Text style={styles.tracklistHint}>Plays in track order, song-by-song without interruption.</Text>
               {tracks.length === 0 ? (
                 <Text style={styles.emptyTracks}>
                   No songs assigned yet. Edit a song and select this release.
@@ -283,6 +314,10 @@ const styles = StyleSheet.create({
   coverHint: { fontSize: 12, color: colors.textMuted, marginTop: spacing.xs },
   section: { marginBottom: spacing.md },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: colors.text, marginBottom: spacing.md },
+  tracklistHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 4 },
+  tracklistHint: { fontSize: 12, color: colors.textMuted, marginBottom: spacing.md },
+  playAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.primary },
+  playAllText: { fontSize: 12, fontWeight: '700', color: colors.text },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 20, backgroundColor: colors.surfaceLight, marginRight: spacing.sm, marginBottom: spacing.xs },
   chipActive: { backgroundColor: colors.primary },

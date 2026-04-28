@@ -207,6 +207,16 @@ export default function TeamScreen() {
             </Card>
           )}
 
+          {/* Trash */}
+          <Pressable onPress={() => router.push('/trash')} style={styles.trashRow}>
+            <Ionicons name="trash-outline" size={20} color={colors.warning} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.trashTitle}>Recently Deleted</Text>
+              <Text style={styles.trashDesc}>Restore artists, songs, releases, or ideas deleted in the last 30 days.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+          </Pressable>
+
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
@@ -256,4 +266,7 @@ const styles = StyleSheet.create({
   dangerTitle: { fontSize: 14, fontWeight: '700', color: colors.error, marginBottom: spacing.sm },
   leaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, paddingVertical: spacing.md, borderRadius: 12, backgroundColor: colors.error + '15' },
   leaveText: { fontSize: 14, fontWeight: '600', color: colors.error },
+  trashRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md, marginTop: spacing.sm, backgroundColor: colors.surface, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  trashTitle: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 2 },
+  trashDesc: { fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
 });

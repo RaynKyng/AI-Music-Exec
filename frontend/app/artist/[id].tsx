@@ -26,7 +26,7 @@ export default function ArtistDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const isNew = id === 'new';
-  const { artists, createArtist, updateArtist, fetchArtists } = useDataStore();
+  const { artists, songs, createArtist, updateArtist, fetchArtists, fetchSongs } = useDataStore();
   
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
@@ -63,6 +63,7 @@ export default function ArtistDetailScreen() {
     if (!isNew && id) {
       loadArtist();
     }
+    fetchSongs();
   }, [id]);
 
   const [savedPrompts, setSavedPrompts] = useState<any[]>([]);
@@ -268,6 +269,35 @@ export default function ArtistDetailScreen() {
               </Pressable>
             </ScrollView>
           </Card>
+
+          {/* AI Prompts Gallery */}
+          {!isNew && (
+            <Card style={styles.section}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Songs by this artist ({songs.filter(s => s.artist_id === id || s.featured_artist_ids?.includes(id!)).length})</Text>
+                  <Text style={styles.galleryDesc}>Tap any song to open. Tap "View All" to filter the catalog.</Text>
+                </View>
+                <Pressable style={[styles.assistantBtn, { backgroundColor: colors.secondary }]} onPress={() => router.push({ pathname: '/(tabs)/songs', params: { artist: id } })}>
+                  <Ionicons name="list" size={14} color={colors.text} />
+                  <Text style={styles.assistantBtnText}>View All</Text>
+                </Pressable>
+              </View>
+              {songs.filter(s => s.artist_id === id || s.featured_artist_ids?.includes(id!)).slice(0, 8).map((song: any) => (
+                <Pressable key={song.id} style={styles.songRow} onPress={() => router.push(`/song/${song.id}`)}>
+                  <View style={[styles.statusDot, song.status === 'released' && { backgroundColor: colors.success }, song.status === 'final' && { backgroundColor: colors.primary }, song.status === 'in_progress' && { backgroundColor: colors.warning }]} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.songRowTitle} numberOfLines={1}>{song.title}</Text>
+                    <Text style={styles.songRowMeta} numberOfLines={1}>{song.genre || ''}{song.mood ? ` \u2022 ${song.mood}` : ''}{song.featured_artist_ids?.includes(id!) ? '  (featured)' : ''}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                </Pressable>
+              ))}
+              {songs.filter(s => s.artist_id === id || s.featured_artist_ids?.includes(id!)).length === 0 && (
+                <Text style={styles.emptyPromptsText}>No songs assigned to this artist yet. Create a song and pick this artist.</Text>
+              )}
+            </Card>
+          )}
 
           {/* AI Prompts Gallery */}
           {!isNew && (
@@ -632,6 +662,10 @@ const styles = StyleSheet.create({
   promptIcon: { padding: 4 },
   promptContent: { fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
   promptMeta: { fontSize: 10, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  songRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.border },
+  songRowTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  songRowMeta: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textMuted },
   tagSection: {
     marginTop: spacing.sm,
   },
