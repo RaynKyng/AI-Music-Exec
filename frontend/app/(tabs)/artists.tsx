@@ -85,9 +85,15 @@ export default function ArtistsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Artist Roster</Text>
-        <TouchableOpacity testID="add-artist-btn" style={styles.addButton} onPress={() => router.push('/artist/new')}>
-          <Ionicons name="add" size={24} color={colors.text} />
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity testID="ai-generate-artist-btn" style={styles.aiGenButton} onPress={() => router.push('/artist/ai-generate')}>
+            <Ionicons name="sparkles" size={16} color={colors.primary} />
+            <Text style={styles.aiGenText}>AI Generate</Text>
+          </TouchableOpacity>
+          <TouchableOpacity testID="add-artist-btn" style={styles.addButton} onPress={() => router.push('/artist/new')}>
+            <Ionicons name="add" size={24} color={colors.text} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchWrap}>
@@ -195,6 +201,9 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  aiGenButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary },
+  aiGenText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   filterRow: { maxHeight: 40, marginBottom: spacing.xs },
   filterContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },

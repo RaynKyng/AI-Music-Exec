@@ -105,6 +105,7 @@ class ArtistCreate(BaseModel):
     suno_voice: str = ""  # saved Suno voice ID/name for this artist
     suno_exclusions: str = ""  # default exclusions prompt for this artist
     notes: str = ""
+    saved_prompts: List[dict] = []  # AI generation logs and saved prompts
     is_private: bool = False  # if true, only visible to the creator within their team
 
 class Artist(ArtistCreate):
@@ -506,6 +507,215 @@ async def create_artist(artist_data: ArtistCreate, current_user: dict = Depends(
     
     await db.artists.insert_one(artist_dict)
     return Artist(**artist_dict)
+
+# ============== AI Artist Generator ==============
+
+class ArtistGenerateRequest(BaseModel):
+    location: str = ""  # e.g., "Baltimore, MD"
+    influences: List[str] = []  # e.g., ["Juice WRLD", "Travis Scott", "XXXTentacion"]
+    genres: List[str] = []  # optional genre hints
+    vibe: str = ""  # optional descriptor
+    custom_prompt: str = ""  # optional free-form direction
+
+@api_router.post("/artists/ai-generate")
+async def ai_generate_artist(data: ArtistGenerateRequest, current_user: dict = Depends(get_current_user)):
+    """Generate a unique fictional artist profile based on location + real-life influences."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="AI not configured")
+    if not data.influences and not data.custom_prompt:
+        raise HTTPException(status_code=400, detail="Provide at least one influence or a custom prompt")
+    
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"artistgen-{uuid.uuid4()}",
+            system_message="""You are a creative A&R / brand strategist. Given real-life artist influences and a location, you craft an original fictional artist profile that fuses those influences into something fresh. Always ground your suggestions in real, recognizable production/sonic signatures. Return ONLY valid JSON."""
+        ).with_model("openai", "gpt-5.2")
+        
+        prompt_parts = []
+        if data.location:
+            prompt_parts.append(f"Location/origin: {data.location}")
+        if data.influences:
+            prompt_parts.append(f"Real-life influences: {', '.join(data.influences)}")
+        if data.genres:
+            prompt_parts.append(f"Genre hints: {', '.join(data.genres)}")
+        if data.vibe:
+            prompt_parts.append(f"Vibe: {data.vibe}")
+        if data.custom_prompt:
+            prompt_parts.append(f"Additional direction: {data.custom_prompt}")
+        
+        prompt = f"""Brief:
+{chr(10).join(prompt_parts)}
+
+Generate a complete artist profile. Return ONLY this JSON:
+{{
+  "name_suggestions": ["3-5 unique artist name ideas"],
+  "primary_name": "the strongest single name pick from the list",
+  "bio": "Public-facing 2-3 sentence bio",
+  "backstory": "Imaginary 4-6 sentence origin story to inspire catalog themes (where they grew up, what shaped them, how they came up, key turning points)",
+  "unique_sound": "One-sentence pitch of their sonic signature",
+  "tone": "voice/personality (e.g., 'introspective and raw', 'cocky and playful')",
+  "themes": ["3-5 recurring lyrical themes they would explore"],
+  "genres": ["primary genre", "secondary genre"],
+  "branding": {{
+    "color_palette": ["hex or color name", "..."],
+    "visual_style": "describe their look/aesthetic in one phrase",
+    "aesthetic": "broader cultural/visual mood",
+    "mood_keywords": ["3-5 mood descriptors"]
+  }},
+  "suno_voice_suggestion": "Suggested Suno voice keywords (e.g., 'male tenor, raspy, melodic')",
+  "suno_style_template": "A starter Suno style prompt that captures the synthesized sound (no real-artist names)",
+  "suno_exclusions": "Default exclusions to keep them on-brand",
+  "influence_breakdown": [
+    {{
+      "influence": "real-life artist name (must be from the brief)",
+      "signature_sound": "describe their actual production/vocal/lyrical signature in detail",
+      "what_we_pull": "specific elements being borrowed (e.g., 'Travis Scott\\'s atmospheric ad-libs and pitched-down vocals'); be concrete",
+      "what_we_drop": "what we intentionally leave out so we don't sound like a clone"
+    }}
+  ],
+  "synthesized_profile": "A cohesive 3-4 sentence summary of how the influences fuse into this NEW unique artist (this is the 'recipe').",
+  "first_3_song_ideas": [
+    {{"title": "song title idea", "concept": "1-2 sentence concept", "suno_style": "starter style prompt"}}
+  ],
+  "next_steps": ["actionable suggestions like 'commission cover art', 'write 3 hooks in this voice', etc."]
+}}"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        import json
+        result = None
+        try:
+            json_start = response.find('{')
+            json_end = response.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                result = json.loads(response[json_start:json_end])
+        except Exception as e:
+            logger.error(f"Failed to parse artist generation: {e}")
+            result = {"raw": response}
+        
+        return result
+    except Exception as e:
+        logger.error(f"AI generate artist error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
+
+@api_router.post("/artists/from-ai-generation")
+async def create_artist_from_ai(data: dict, current_user: dict = Depends(get_current_user)):
+    """Create an artist record using a previously-generated AI profile, saving the full generation log to saved_prompts."""
+    profile = data.get("profile", {})
+    raw_brief = data.get("brief", {})  # original ArtistGenerateRequest
+    
+    name = data.get("name") or profile.get("primary_name") or (profile.get("name_suggestions") or [""])[0]
+    if not name:
+        raise HTTPException(status_code=400, detail="Artist name required")
+    
+    # Build summary text for saved prompt
+    lines = [f"=== AI Artist Generation ===\nGenerated: {datetime.utcnow().strftime('%b %d, %Y at %H:%M UTC')}\n"]
+    if raw_brief:
+        lines.append("--- Brief ---")
+        if raw_brief.get("location"): lines.append(f"Location: {raw_brief['location']}")
+        if raw_brief.get("influences"): lines.append(f"Influences: {', '.join(raw_brief['influences'])}")
+        if raw_brief.get("genres"): lines.append(f"Genres: {', '.join(raw_brief['genres'])}")
+        if raw_brief.get("vibe"): lines.append(f"Vibe: {raw_brief['vibe']}")
+        if raw_brief.get("custom_prompt"): lines.append(f"Direction: {raw_brief['custom_prompt']}")
+    lines.append("")
+    if profile.get("synthesized_profile"):
+        lines.append(f"--- Synthesis ---\n{profile['synthesized_profile']}\n")
+    if profile.get("backstory"):
+        lines.append(f"--- Backstory ---\n{profile['backstory']}\n")
+    if profile.get("influence_breakdown"):
+        lines.append("--- Influence Breakdown ---")
+        for inf in profile["influence_breakdown"]:
+            if isinstance(inf, dict):
+                lines.append(f"\n{inf.get('influence', '')}:")
+                lines.append(f"  Signature: {inf.get('signature_sound', '')}")
+                lines.append(f"  Pulling: {inf.get('what_we_pull', '')}")
+                lines.append(f"  Dropping: {inf.get('what_we_drop', '')}")
+    if profile.get("first_3_song_ideas"):
+        lines.append("\n--- Starter Song Ideas ---")
+        for i, s in enumerate(profile["first_3_song_ideas"]):
+            if isinstance(s, dict):
+                lines.append(f"{i+1}. {s.get('title', '')}: {s.get('concept', '')}")
+                if s.get("suno_style"):
+                    lines.append(f"   Suno style: {s['suno_style']}")
+    if profile.get("next_steps"):
+        lines.append("\n--- Next Steps ---")
+        for s in profile["next_steps"]:
+            lines.append(f"- {s}")
+    saved_summary = "\n".join(lines)
+    
+    artist_dict = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "team_id": current_user.get("team_id", current_user["id"]),
+        "name": name,
+        "bio": profile.get("bio", ""),
+        "unique_sound": profile.get("unique_sound", ""),
+        "genres": profile.get("genres", []),
+        "themes": profile.get("themes", []),
+        "tone": profile.get("tone", ""),
+        "patterns": [],
+        "branding": profile.get("branding", {"color_palette": [], "visual_style": "", "aesthetic": "", "mood_keywords": []}),
+        "image_url": "",
+        "profile_image": "",
+        "character_images": [],
+        "visual_brief": "",
+        "visual_references": [],
+        "suno_voice": profile.get("suno_voice_suggestion", ""),
+        "suno_exclusions": profile.get("suno_exclusions", ""),
+        "notes": profile.get("backstory", ""),
+        "is_private": False,
+        "song_count": 0,
+        "saved_prompts": [
+            {
+                "id": str(uuid.uuid4()),
+                "prompt_type": "ai_artist_generation",
+                "label": f"AI Generation \u00b7 {datetime.utcnow().strftime('%b %d, %Y')}",
+                "content": saved_summary,
+                "saved_by_id": current_user["id"],
+                "saved_by_name": current_user.get("name", ""),
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        ],
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+    }
+    await db.artists.insert_one(artist_dict)
+    return {k: v for k, v in artist_dict.items() if k != "_id"}
+
+# ============== Saved Prompts on Artists ==============
+
+@api_router.post("/artists/{artist_id}/saved-prompts")
+async def add_artist_saved_prompt(artist_id: str, data: SavedPromptCreate, current_user: dict = Depends(get_current_user)):
+    artist = await db.artists.find_one(team_query(current_user, {"id": artist_id}))
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    prompt = {
+        "id": str(uuid.uuid4()),
+        "prompt_type": data.prompt_type,
+        "label": data.label,
+        "content": data.content,
+        "saved_by_id": current_user["id"],
+        "saved_by_name": current_user.get("name", ""),
+        "created_at": datetime.utcnow().isoformat(),
+    }
+    await db.artists.update_one(
+        {"id": artist_id},
+        {"$push": {"saved_prompts": prompt}, "$set": {"updated_at": datetime.utcnow()}}
+    )
+    return prompt
+
+@api_router.delete("/artists/{artist_id}/saved-prompts/{prompt_id}")
+async def delete_artist_saved_prompt(artist_id: str, prompt_id: str, current_user: dict = Depends(get_current_user)):
+    artist = await db.artists.find_one(team_query(current_user, {"id": artist_id}))
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist not found")
+    await db.artists.update_one(
+        {"id": artist_id},
+        {"$pull": {"saved_prompts": {"id": prompt_id}}, "$set": {"updated_at": datetime.utcnow()}}
+    )
+    return {"message": "Saved prompt deleted"}
 
 @api_router.get("/artists", response_model=List[Artist])
 async def get_artists(
@@ -996,27 +1206,35 @@ async def quick_add_song(data: QuickAddSong, current_user: dict = Depends(get_cu
     ai_suggestions = None
     if EMERGENT_LLM_KEY and (data.lyrics or data.style_prompt):
         try:
-            # Build artist context
+            # Build artist context — full roster so AI can suggest fits
+            roster = await db.artists.find(team_query(current_user)).to_list(100)
+            roster_summary = "\n".join([
+                f"- {a.get('name','')}: {a.get('unique_sound','')[:80]} | genres: {', '.join(a.get('genres',[]))} | tone: {a.get('tone','')[:50]}"
+                for a in roster
+            ]) if roster else "(no artists in roster yet)"
+
             artist_context = ""
             if data.artist_id:
-                artist = await db.artists.find_one({"id": data.artist_id})
+                artist = next((a for a in roster if a.get("id") == data.artist_id), None)
                 if artist:
                     artist_songs = await db.songs.find(team_query(current_user, {"artist_id": data.artist_id})).to_list(50)
                     existing_genres = list(set(s.get("genre", "") for s in artist_songs if s.get("genre")))
                     existing_moods = list(set(s.get("mood", "") for s in artist_songs if s.get("mood")))
                     artist_context = f"""
-Artist: {artist.get('name', '')}
+Currently Assigned Artist: {artist.get('name', '')}
 Sound: {artist.get('unique_sound', '')}
 Genres: {', '.join(artist.get('genres', []))}
 Tone: {artist.get('tone', '')}
-Themes: {', '.join(artist.get('themes', []))}
 Existing catalog genres: {', '.join(existing_genres)}
 Existing catalog moods: {', '.join(existing_moods)}"""
-            
+
             chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"quickadd-{uuid.uuid4()}",
-                system_message=f"""You analyze song lyrics and details to suggest missing metadata. Return ONLY valid JSON.
+                system_message=f"""You are an A&R assistant for an indie label. Analyze song lyrics to suggest metadata, real-life artist references, and how the song could fit existing roster artists. Return ONLY valid JSON.
+
+ROSTER (current artists):
+{roster_summary}
 {artist_context}"""
             ).with_model("openai", "gpt-5.2")
             
@@ -1026,7 +1244,7 @@ Existing catalog moods: {', '.join(existing_moods)}"""
             if data.style_prompt:
                 content += f"Style: {data.style_prompt}\n"
             
-            prompt = f"""Analyze this song and return JSON with suggested fields:
+            prompt = f"""Analyze this song:
 {content}
 
 Return ONLY this JSON (no other text):
@@ -1036,13 +1254,22 @@ Return ONLY this JSON (no other text):
   "tempo": "suggested tempo (slow/medium/fast + approx BPM)",
   "themes": ["theme1", "theme2", "theme3"],
   "style_suggestions": [
-    "style prompt suggestion 1 (Suno format, no artist references)",
-    "style prompt suggestion 2",
-    "style prompt suggestion 3"
+    "Suno style prompt option 1 (no real artist names)",
+    "Suno style prompt option 2",
+    "Suno style prompt option 3"
   ],
-  "suggested_artists": ["artist name from roster that fits this song"],
-  "next_steps": ["suggestion for what to do next with this song"]
-}}"""
+  "real_life_artist_fit": [
+    {{"artist": "real-life artist name", "why": "why this song fits their sound", "reference_track": "an actual track of theirs that matches the vibe"}}
+  ],
+  "roster_fit_analysis": [
+    {{"roster_artist": "artist name from roster", "fit_score": "low|medium|high|perfect", "why_it_fits": "explanation", "how_to_alter": "concrete tweaks to push this song toward that artist's sound — even if it's an out-of-left-field connection, suggest creative bridges"}}
+  ],
+  "suggested_artists": ["roster artist names that fit best, in order"],
+  "next_steps": ["actionable suggestion 1", "actionable suggestion 2"],
+  "left_field_inspiration": "If this song could spark a brand-new direction (or a new artist), describe the vibe, genre fusion, and aesthetic in 2-3 sentences."
+}}
+
+CRITICAL: Always include `real_life_artist_fit` (1-3 entries). For `roster_fit_analysis`, evaluate EVERY roster artist (even if score is low) so the user can see creative connections they wouldn't have thought of."""
             
             user_message = UserMessage(text=prompt)
             response = await chat.send_message(user_message)
@@ -1079,8 +1306,27 @@ Return ONLY this JSON (no other text):
             lines.append("\n--- Style Suggestions ---")
             for i, s in enumerate(ai_suggestions["style_suggestions"]):
                 lines.append(f"{chr(65+i)}: {s}")
+        if ai_suggestions.get("real_life_artist_fit"):
+            lines.append("\n--- Real-Life Artists This Song Fits ---")
+            for r in ai_suggestions["real_life_artist_fit"]:
+                if isinstance(r, dict):
+                    lines.append(f"\u2022 {r.get('artist', '')}: {r.get('why', '')}")
+                    if r.get("reference_track"):
+                        lines.append(f"  Reference track: {r['reference_track']}")
+                else:
+                    lines.append(f"\u2022 {r}")
+        if ai_suggestions.get("roster_fit_analysis"):
+            lines.append("\n--- How It Fits Your Roster ---")
+            for r in ai_suggestions["roster_fit_analysis"]:
+                if isinstance(r, dict):
+                    lines.append(f"\n{r.get('roster_artist', '')} ({r.get('fit_score', '')} fit)")
+                    lines.append(f"  Why: {r.get('why_it_fits', '')}")
+                    if r.get("how_to_alter"):
+                        lines.append(f"  Alter to fit: {r['how_to_alter']}")
         if ai_suggestions.get("suggested_artists"):
-            lines.append(f"\nSuggested Artists: {', '.join(ai_suggestions['suggested_artists'])}")
+            lines.append(f"\nBest Roster Picks: {', '.join(ai_suggestions['suggested_artists'])}")
+        if ai_suggestions.get("left_field_inspiration"):
+            lines.append(f"\n--- Left-Field Inspiration ---\n{ai_suggestions['left_field_inspiration']}")
         if ai_suggestions.get("next_steps"):
             lines.append("\n--- Next Steps ---")
             for s in ai_suggestions["next_steps"]:

@@ -185,10 +185,57 @@ export default function QuickAddScreen() {
 
                   {result.ai_suggestions.suggested_artists?.length > 0 && (
                     <Card style={styles.sugCard}>
-                      <Text style={styles.sugTitle}>Suggested Artists</Text>
+                      <Text style={styles.sugTitle}>Best Roster Picks</Text>
                       {result.ai_suggestions.suggested_artists.map((a: string, i: number) => (
                         <Text key={i} style={styles.sugArtist}>{a}</Text>
                       ))}
+                    </Card>
+                  )}
+
+                  {result.ai_suggestions.real_life_artist_fit?.length > 0 && (
+                    <Card style={styles.sugCard}>
+                      <Text style={styles.sugTitle}>🌍 Real-Life Artist Fit</Text>
+                      <Text style={styles.sugSub}>If no roster artist fits, these real-world artists match this song&rsquo;s vibe — useful inspiration even if you don&rsquo;t use them:</Text>
+                      {result.ai_suggestions.real_life_artist_fit.map((r: any, i: number) => (
+                        <View key={i} style={styles.rlFitItem}>
+                          <Text style={styles.rlFitName}>{typeof r === 'string' ? r : r.artist}</Text>
+                          {typeof r === 'object' && r.why ? <Text style={styles.rlFitWhy}>{r.why}</Text> : null}
+                          {typeof r === 'object' && r.reference_track ? <Text style={styles.rlFitTrack}>↪ Reference: {r.reference_track}</Text> : null}
+                        </View>
+                      ))}
+                    </Card>
+                  )}
+
+                  {result.ai_suggestions.roster_fit_analysis?.length > 0 && (
+                    <Card style={styles.sugCard}>
+                      <Text style={styles.sugTitle}>🎯 How It Fits Your Roster</Text>
+                      <Text style={styles.sugSub}>Even out-of-left-field connections — pick what inspires you:</Text>
+                      {result.ai_suggestions.roster_fit_analysis.map((r: any, i: number) => (
+                        <View key={i} style={styles.rosterFitItem}>
+                          <View style={styles.rosterFitHeader}>
+                            <Text style={styles.rosterFitName}>{r.roster_artist}</Text>
+                            <View style={[styles.fitBadge, r.fit_score === 'perfect' && { backgroundColor: colors.success }, r.fit_score === 'high' && { backgroundColor: colors.primary }, r.fit_score === 'medium' && { backgroundColor: colors.warning }, r.fit_score === 'low' && { backgroundColor: colors.surfaceLight }]}>
+                              <Text style={styles.fitBadgeText}>{r.fit_score} fit</Text>
+                            </View>
+                          </View>
+                          {r.why_it_fits ? <Text style={styles.rosterFitText}>Why: {r.why_it_fits}</Text> : null}
+                          {r.how_to_alter ? <Text style={[styles.rosterFitText, { color: colors.primary, fontStyle: 'italic' }]}>Alter: {r.how_to_alter}</Text> : null}
+                        </View>
+                      ))}
+                    </Card>
+                  )}
+
+                  {result.ai_suggestions.left_field_inspiration && (
+                    <Card style={[styles.sugCard, { borderWidth: 1, borderColor: colors.warning + '60' }]}>
+                      <Text style={styles.sugTitle}>💫 Left-Field Inspiration</Text>
+                      <Text style={styles.leftFieldText}>{result.ai_suggestions.left_field_inspiration}</Text>
+                      <Pressable
+                        style={styles.generateArtistBtn}
+                        onPress={() => router.push({ pathname: '/artist/ai-generate', params: { vibe: result.ai_suggestions.left_field_inspiration?.slice(0, 200) || '' } })}
+                      >
+                        <Ionicons name="sparkles" size={14} color={colors.text} />
+                        <Text style={styles.generateArtistBtnText}>Generate New Artist From This Vibe</Text>
+                      </Pressable>
                     </Card>
                   )}
 
@@ -268,4 +315,18 @@ const styles = StyleSheet.create({
   nextStep: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginBottom: spacing.sm },
   nextStepText: { flex: 1, fontSize: 13, color: colors.text, lineHeight: 18 },
   actionRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
+  sugSub: { fontSize: 11, color: colors.textMuted, marginBottom: spacing.sm, lineHeight: 15, fontStyle: 'italic' },
+  rlFitItem: { borderLeftWidth: 3, borderLeftColor: colors.warning, paddingLeft: spacing.sm, marginBottom: spacing.sm },
+  rlFitName: { fontSize: 13, fontWeight: '700', color: colors.text },
+  rlFitWhy: { fontSize: 12, color: colors.textSecondary, marginTop: 2, lineHeight: 17 },
+  rlFitTrack: { fontSize: 11, color: colors.warning, fontStyle: 'italic', marginTop: 2 },
+  rosterFitItem: { backgroundColor: colors.surfaceLight, borderRadius: 8, padding: spacing.sm, marginBottom: spacing.sm },
+  rosterFitHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  rosterFitName: { fontSize: 13, fontWeight: '700', color: colors.primary, flex: 1 },
+  fitBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.surfaceLight },
+  fitBadgeText: { fontSize: 10, fontWeight: '700', color: colors.text, textTransform: 'uppercase' },
+  rosterFitText: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, marginTop: 4 },
+  leftFieldText: { fontSize: 13, color: colors.text, lineHeight: 19, fontStyle: 'italic', marginBottom: spacing.md },
+  generateArtistBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: colors.warning },
+  generateArtistBtnText: { fontSize: 12, fontWeight: '700', color: colors.text },
 });
