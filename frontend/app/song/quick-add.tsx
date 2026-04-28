@@ -137,6 +137,10 @@ export default function QuickAddScreen() {
                 <Ionicons name="checkmark-circle" size={32} color={colors.success} />
                 <Text style={styles.successTitle}>"{result.song.title}" Added!</Text>
                 <Text style={styles.successSub}>Saved as draft. Here's what the AI suggests:</Text>
+                <View style={styles.savedBanner}>
+                  <Ionicons name="bookmark" size={14} color={colors.primary} />
+                  <Text style={styles.savedBannerText}>Full analysis saved to this song&rsquo;s AI Prompts Gallery — you can refer back anytime.</Text>
+                </View>
               </Card>
 
               {result.ai_suggestions && !result.ai_suggestions.raw ? (
@@ -246,6 +250,8 @@ const styles = StyleSheet.create({
   successCard: { alignItems: 'center', padding: spacing.lg, marginBottom: spacing.md },
   successTitle: { fontSize: 18, fontWeight: '600', color: colors.text, marginTop: spacing.sm },
   successSub: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+  savedBanner: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md, paddingHorizontal: spacing.sm, paddingVertical: 8, backgroundColor: colors.primary + '20', borderRadius: 10 },
+  savedBannerText: { flex: 1, fontSize: 11, color: colors.primary, lineHeight: 16 },
   sugCard: { marginBottom: spacing.md },
   sugTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
   sugRow: { flexDirection: 'row', marginBottom: spacing.sm, gap: spacing.sm },

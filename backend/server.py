@@ -1062,6 +1062,50 @@ Return ONLY this JSON (no other text):
         except Exception as e:
             logger.error(f"Quick add AI analysis error: {str(e)}")
     
+    # Auto-save the full AI analysis as a saved_prompt on the song's profile
+    # so the user can always refer back to it later, even if they don't apply suggestions.
+    if ai_suggestions and not ai_suggestions.get("raw"):
+        # Build a human-readable summary
+        lines = ["=== Quick Add AI Analysis ==="]
+        if ai_suggestions.get("genre"):
+            lines.append(f"Genre: {ai_suggestions['genre']}")
+        if ai_suggestions.get("mood"):
+            lines.append(f"Mood: {ai_suggestions['mood']}")
+        if ai_suggestions.get("tempo"):
+            lines.append(f"Tempo: {ai_suggestions['tempo']}")
+        if ai_suggestions.get("themes"):
+            lines.append(f"Themes: {', '.join(ai_suggestions['themes'])}")
+        if ai_suggestions.get("style_suggestions"):
+            lines.append("\n--- Style Suggestions ---")
+            for i, s in enumerate(ai_suggestions["style_suggestions"]):
+                lines.append(f"{chr(65+i)}: {s}")
+        if ai_suggestions.get("suggested_artists"):
+            lines.append(f"\nSuggested Artists: {', '.join(ai_suggestions['suggested_artists'])}")
+        if ai_suggestions.get("next_steps"):
+            lines.append("\n--- Next Steps ---")
+            for s in ai_suggestions["next_steps"]:
+                lines.append(f"- {s}")
+        summary_content = "\n".join(lines)
+    elif ai_suggestions and ai_suggestions.get("raw"):
+        summary_content = ai_suggestions["raw"]
+    else:
+        summary_content = ""
+    
+    if summary_content:
+        prompt_record = {
+            "id": str(uuid.uuid4()),
+            "prompt_type": "quick_add_analysis",
+            "label": f"Quick Add Analysis · {datetime.utcnow().strftime('%b %d, %Y')}",
+            "content": summary_content,
+            "saved_by_id": current_user["id"],
+            "saved_by_name": current_user.get("name", ""),
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        await db.songs.update_one(
+            {"id": song_dict["id"]},
+            {"$push": {"saved_prompts": prompt_record}}
+        )
+    
     return {
         "song": {k: v for k, v in song_dict.items() if k != "_id"},
         "ai_suggestions": ai_suggestions,
