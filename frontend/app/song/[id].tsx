@@ -41,6 +41,7 @@ export default function SongDetailScreen() {
     featured_artist_ids: [] as string[],
     collection_id: null as string | null,
     lyrics: '',
+    authorship: 'original' as string,
     style_prompt: '',
     style_secondary: '',
     style_alternate: '',
@@ -54,6 +55,7 @@ export default function SongDetailScreen() {
     todo: [] as string[],
     versions: [] as Song['versions'],
     suno_generations: [] as any[],
+    saved_prompts: [] as any[],
     track_number: 0,
   });
   
@@ -106,6 +108,7 @@ export default function SongDetailScreen() {
         featured_artist_ids: song.featured_artist_ids || [],
         collection_id: song.collection_id || null,
         lyrics: song.lyrics,
+        authorship: song.authorship || 'original',
         style_prompt: song.style_prompt,
         style_secondary: song.style_secondary || '',
         style_alternate: song.style_alternate || '',
@@ -119,6 +122,7 @@ export default function SongDetailScreen() {
         todo: song.todo || [],
         versions: song.versions || [],
         suno_generations: song.suno_generations || [],
+        saved_prompts: song.saved_prompts || [],
         track_number: song.track_number || 0,
       });
     } catch { /* ignore */ }
@@ -619,6 +623,62 @@ export default function SongDetailScreen() {
                 <CollabComments targetType="song" targetId={id!} />
               </Card>
 
+              {/* AI Prompts Gallery */}
+              <Card style={styles.section}>
+                <View style={styles.sectionHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>AI Prompts Gallery ({form.saved_prompts?.length || 0})</Text>
+                    <Text style={styles.sectionSub}>Suno styles, video storyboards, and chat outputs saved here.</Text>
+                  </View>
+                  <Pressable style={styles.assistantBtn} onPress={() => router.push(`/assistant?songId=${id}`)}>
+                    <Ionicons name="sparkles" size={14} color={colors.text} />
+                    <Text style={styles.assistantBtnText}>Assistant</Text>
+                  </Pressable>
+                </View>
+
+                {form.saved_prompts?.length === 0 ? (
+                  <View style={styles.emptyPrompts}>
+                    <Ionicons name="bookmark-outline" size={28} color={colors.textMuted} />
+                    <Text style={styles.emptyPromptsText}>No saved prompts yet. Generate one in the AI tab or chat with the Assistant and tap "Save to Song".</Text>
+                  </View>
+                ) : (
+                  form.saved_prompts.map((p: any, i: number) => (
+                    <View key={p.id || i} style={styles.promptItem}>
+                      <View style={styles.promptHeader}>
+                        <View style={[styles.promptTypeBadge, p.prompt_type === 'video_storyboard' && { backgroundColor: '#EF4444' }, p.prompt_type === 'suno_style' && { backgroundColor: colors.secondary }]}>
+                          <Ionicons name={p.prompt_type === 'video_storyboard' ? 'videocam' : p.prompt_type === 'suno_style' ? 'musical-note' : 'sparkles'} size={12} color={colors.text} />
+                          <Text style={styles.promptTypeText}>{p.prompt_type?.replace(/_/g, ' ') || 'prompt'}</Text>
+                        </View>
+                        <Text style={styles.promptLabel}>{p.label}</Text>
+                        <Pressable onPress={async () => {
+                          const Clipboard = await import('expo-clipboard');
+                          await Clipboard.setStringAsync(p.content);
+                          Alert.alert('Copied', 'Prompt copied');
+                        }} style={styles.promptIcon}>
+                          <Ionicons name="copy-outline" size={16} color={colors.primary} />
+                        </Pressable>
+                        <Pressable onPress={() => {
+                          Alert.alert('Delete prompt?', '', [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Delete', style: 'destructive', onPress: async () => {
+                              try {
+                                const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+                                await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${id}/saved-prompts/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                                setForm({ ...form, saved_prompts: form.saved_prompts.filter((x: any) => x.id !== p.id) });
+                              } catch {}
+                            }}
+                          ]);
+                        }} style={styles.promptIcon}>
+                          <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        </Pressable>
+                      </View>
+                      <Text style={styles.promptContent} numberOfLines={6}>{p.content}</Text>
+                      {p.saved_by_name ? <Text style={styles.promptMeta}>Saved by {p.saved_by_name}</Text> : null}
+                    </View>
+                  ))
+                )}
+              </Card>
+
               {/* Quick Actions */}
               <View style={styles.actionRow}>
                 <Pressable style={styles.actionBtn} onPress={() => router.push(`/song/share/${id}`)}>
@@ -870,6 +930,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: spacing.md, gap: spacing.sm },
+  sectionSub: { fontSize: 12, color: colors.textSecondary, marginTop: 4 },
+  assistantBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.primary },
+  assistantBtnText: { fontSize: 11, fontWeight: '600', color: colors.text },
+  emptyPrompts: { alignItems: 'center', paddingVertical: spacing.lg, gap: spacing.sm },
+  emptyPromptsText: { fontSize: 12, color: colors.textMuted, textAlign: 'center', maxWidth: 260, lineHeight: 17 },
+  promptItem: { backgroundColor: colors.surfaceLight, borderRadius: 10, padding: spacing.sm, marginBottom: spacing.sm },
+  promptHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: 6 },
+  promptTypeBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, backgroundColor: colors.primary, gap: 3 },
+  promptTypeText: { fontSize: 9, fontWeight: '700', color: colors.text, textTransform: 'uppercase' },
+  promptLabel: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.text },
+  promptIcon: { padding: 4 },
+  promptContent: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  promptMeta: { fontSize: 10, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
   label: {
     fontSize: 14,
     fontWeight: '600',

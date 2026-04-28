@@ -56,12 +56,14 @@ export default function Dashboard() {
           <Text style={styles.greeting}>Welcome back,</Text>
           <Text style={styles.userName}>{user?.name || 'Music Executive'}</Text>
         </View>
-        <Pressable testID="logout-btn" onPress={handleLogout} style={styles.logoutBtn}>
-          <View style={styles.logoutInner}>
-            <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
-            <Text style={styles.logoutText}>Sign Out</Text>
-          </View>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable testID="assistant-btn" onPress={() => router.push('/assistant')} style={styles.headerIconBtn}>
+            <Ionicons name="chatbubbles" size={20} color={colors.primary} />
+          </Pressable>
+          <Pressable testID="team-btn" onPress={() => router.push('/team')} style={styles.headerIconBtn}>
+            <Ionicons name="people-circle" size={22} color={colors.text} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView style={styles.scroll}
@@ -229,6 +231,8 @@ const styles = StyleSheet.create({
   logoutBtn: { padding: spacing.sm, backgroundColor: colors.surfaceLight, borderRadius: 8, minWidth: 100, minHeight: 44 },
   logoutInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: spacing.sm },
   logoutText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
+  headerActions: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  headerIconBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center' },
   scroll: { flex: 1, paddingHorizontal: spacing.lg },
   statsGrid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg },
   statCard: { flex: 1, alignItems: 'center', padding: spacing.md },

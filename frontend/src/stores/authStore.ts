@@ -14,6 +14,7 @@ interface AuthState {
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   loadAuth: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -85,6 +86,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } catch {
       set({ isLoading: false });
     }
+  },
+
+  refreshUser: async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      const res = await fetch(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const user = await res.json();
+        await AsyncStorage.setItem('user', JSON.stringify(user));
+        set({ user });
+      }
+    } catch {}
   },
 }));
 

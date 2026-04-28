@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +18,8 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/utils/theme';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
 const ANALYSIS_TYPES = [
   { id: 'lyrics', label: 'Analyze Lyrics', icon: 'text' },
@@ -27,12 +30,14 @@ const ANALYSIS_TYPES = [
 ];
 
 export default function AIToolsScreen() {
-  const { artists, analyzeContent, generateSunoPrompt, fetchArtists } = useDataStore();
+  const router = useRouter();
+  const { artists, songs, analyzeContent, generateSunoPrompt, fetchArtists, fetchSongs } = useDataStore();
   const [content, setContent] = useState('');
   const [selectedType, setSelectedType] = useState('lyrics');
   const [selectedArtist, setSelectedArtist] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [saveSongId, setSaveSongId] = useState<string | null>(null);
   
   // Suno quick generator
   const [genre, setGenre] = useState('');
@@ -50,7 +55,31 @@ export default function AIToolsScreen() {
 
   React.useEffect(() => {
     fetchArtists();
+    fetchSongs();
   }, []);
+
+  const saveToSong = async (promptType: string, label: string, content: string) => {
+    if (!saveSongId) {
+      Alert.alert('Pick a Song', 'Use the "Save to" picker below to choose which song to attach this prompt to.');
+      return;
+    }
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${saveSongId}/saved-prompts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prompt_type: promptType, label, content }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      const songTitle = songs.find(s => s.id === saveSongId)?.title || '';
+      Alert.alert('Saved!', `Prompt saved to "${songTitle}"\u2019s gallery.`, [
+        { text: 'View song', onPress: () => router.push(`/song/${saveSongId}`) },
+        { text: 'OK' },
+      ]);
+    } catch {
+      Alert.alert('Error', 'Could not save');
+    }
+  };
 
   const handleAnalyze = async () => {
     if (!content.trim()) {
@@ -104,6 +133,36 @@ export default function AIToolsScreen() {
           <Text style={styles.subtitle}>
             Analyze lyrics, generate Suno prompts, and enhance your music
           </Text>
+
+          {/* Assistant CTA */}
+          <Pressable style={styles.assistantCta} onPress={() => router.push('/assistant')}>
+            <Ionicons name="chatbubbles" size={22} color={colors.text} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.ctaTitle}>Open Creative Assistant</Text>
+              <Text style={styles.ctaSub}>Multi-turn chat that knows your roster, songs, and writing voice</Text>
+            </View>
+            <Ionicons name="arrow-forward" size={18} color={colors.text} />
+          </Pressable>
+
+          {/* Save to Song Picker */}
+          {songs.length > 0 && (
+            <View style={styles.saveToBox}>
+              <View style={styles.saveToHeader}>
+                <Ionicons name="bookmark" size={14} color={colors.primary} />
+                <Text style={styles.saveToLabel}>Save outputs below to:</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <Pressable style={[styles.saveToChip, !saveSongId && styles.saveToChipActive]} onPress={() => setSaveSongId(null)}>
+                  <Text style={[styles.saveToChipText, !saveSongId && styles.saveToChipTextActive]}>None</Text>
+                </Pressable>
+                {songs.slice(0, 30).map(s => (
+                  <Pressable key={s.id} style={[styles.saveToChip, saveSongId === s.id && styles.saveToChipActive]} onPress={() => setSaveSongId(s.id)}>
+                    <Text style={[styles.saveToChipText, saveSongId === s.id && styles.saveToChipTextActive]} numberOfLines={1}>{s.title}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
           {/* Quick Suno Prompt Generator */}
           <Card style={styles.section}>
@@ -166,9 +225,15 @@ export default function AIToolsScreen() {
               <View style={styles.resultBox}>
                 <View style={styles.resultHeader}>
                   <Text style={styles.resultLabel}>Suno Prompt:</Text>
-                  <TouchableOpacity onPress={() => copyToClipboard(sunoPrompt)}>
-                    <Ionicons name="copy-outline" size={20} color={colors.primary} />
-                  </TouchableOpacity>
+                  <View style={styles.resultActions}>
+                    <Pressable onPress={() => saveToSong('suno_style', `${genre} ${mood}`.trim() || 'Suno style', sunoPrompt)} style={styles.saveBtn}>
+                      <Ionicons name="bookmark-outline" size={16} color={colors.primary} />
+                      <Text style={styles.saveBtnText}>Save to Song</Text>
+                    </Pressable>
+                    <TouchableOpacity onPress={() => copyToClipboard(sunoPrompt)}>
+                      <Ionicons name="copy-outline" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <Text style={styles.resultText}>{sunoPrompt}</Text>
               </View>
@@ -394,9 +459,15 @@ export default function AIToolsScreen() {
               <View style={styles.resultBox}>
                 <View style={styles.resultHeader}>
                   <Text style={styles.resultLabel}>Video Storyboard:</Text>
-                  <TouchableOpacity onPress={() => copyToClipboard(videoResult)}>
-                    <Ionicons name="copy-outline" size={20} color={colors.primary} />
-                  </TouchableOpacity>
+                  <View style={styles.resultActions}>
+                    <Pressable onPress={() => saveToSong('video_storyboard', `Video storyboard ${new Date().toLocaleDateString()}`, videoResult)} style={styles.saveBtn}>
+                      <Ionicons name="bookmark-outline" size={16} color={colors.primary} />
+                      <Text style={styles.saveBtnText}>Save to Song</Text>
+                    </Pressable>
+                    <TouchableOpacity onPress={() => copyToClipboard(videoResult)}>
+                      <Ionicons name="copy-outline" size={20} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 <Text style={styles.resultText}>{videoResult}</Text>
               </View>
@@ -435,6 +506,19 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     marginBottom: spacing.lg,
   },
+  assistantCta: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, borderRadius: 14, backgroundColor: colors.primary, marginBottom: spacing.md },
+  ctaTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  ctaSub: { fontSize: 12, color: colors.text + 'cc', marginTop: 2 },
+  saveToBox: { backgroundColor: colors.surfaceLight, borderRadius: 10, padding: spacing.sm, marginBottom: spacing.md },
+  saveToHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  saveToLabel: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  saveToChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: colors.surface, marginRight: 6, maxWidth: 160 },
+  saveToChipActive: { backgroundColor: colors.primary },
+  saveToChipText: { fontSize: 11, color: colors.textSecondary, fontWeight: '500' },
+  saveToChipTextActive: { color: colors.text },
+  resultActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  saveBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, backgroundColor: colors.primary + '20' },
+  saveBtnText: { fontSize: 11, color: colors.primary, fontWeight: '600' },
   section: {
     marginBottom: spacing.lg,
   },

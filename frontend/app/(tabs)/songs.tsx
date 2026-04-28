@@ -101,6 +101,10 @@ export default function SongsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Song Catalog</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity testID="quick-add-btn" style={styles.quickAddButton} onPress={() => router.push('/song/quick-add')}>
+            <Ionicons name="sparkles" size={18} color={colors.text} />
+            <Text style={styles.quickAddText}>Quick AI</Text>
+          </TouchableOpacity>
           <TouchableOpacity testID="csv-import-btn" style={styles.importButton} onPress={() => { setImportModal(true); setImportResult(null); setCsvText(''); }}>
             <Ionicons name="cloud-upload" size={20} color={colors.primary} />
           </TouchableOpacity>
@@ -320,6 +324,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   importButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
+  quickAddButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary },
+  quickAddText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   filterScroll: { maxHeight: 44, marginBottom: spacing.xs },
   filterContainer: { paddingHorizontal: spacing.lg, gap: spacing.sm },

@@ -46,6 +46,7 @@ export default function ArtistDetailScreen() {
     },
     image_url: '',
     profile_image: '',
+    character_images: [] as string[],
     visual_brief: '',
     visual_references: [] as string[],
     suno_voice: '',
@@ -83,6 +84,7 @@ export default function ArtistDetailScreen() {
         branding: artist.branding || { color_palette: [], visual_style: '', aesthetic: '', mood_keywords: [] },
         image_url: artist.image_url || '',
         profile_image: artist.profile_image || '',
+        character_images: artist.character_images || [],
         visual_brief: artist.visual_brief || '',
         visual_references: artist.visual_references || [],
         suno_voice: artist.suno_voice || '',
@@ -212,6 +214,56 @@ export default function ArtistDetailScreen() {
               onChangeText={(text) => setForm({ ...form, image_url: text })}
               autoCapitalize="none"
             />
+          </Card>
+
+          {/* Character Gallery */}
+          <Card style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>Character Gallery ({form.character_images.length})</Text>
+                <Text style={styles.galleryDesc}>Reference shots beyond the profile pic — different angles, outfits, moods, locations.</Text>
+              </View>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
+              {form.character_images.map((img, i) => (
+                <View key={i} style={styles.galleryItem}>
+                  <Image source={{ uri: img }} style={styles.galleryImg} />
+                  <Pressable style={styles.galleryRemove} onPress={() => {
+                    const updated = [...form.character_images];
+                    updated.splice(i, 1);
+                    setForm({ ...form, character_images: updated });
+                  }}>
+                    <Ionicons name="close" size={14} color={colors.text} />
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable style={styles.galleryAdd} onPress={async () => {
+                try {
+                  const result = await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ['images'],
+                    quality: 0.4,
+                    base64: true,
+                  });
+                  if (!result.canceled && result.assets[0].base64) {
+                    setForm({ ...form, character_images: [...form.character_images, `data:image/jpeg;base64,${result.assets[0].base64}`] });
+                  }
+                } catch { Alert.alert('Error', 'Could not add image'); }
+              }}>
+                <Ionicons name="add" size={28} color={colors.primary} />
+                <Text style={styles.galleryAddText}>Upload</Text>
+              </Pressable>
+              <Pressable style={styles.galleryAdd} onPress={() => {
+                if (Alert.prompt) {
+                  Alert.prompt('Add Image URL', 'Paste an image URL', (url) => {
+                    if (url?.trim()) setForm({ ...form, character_images: [...form.character_images, url.trim()] });
+                  });
+                }
+              }}>
+                <Ionicons name="link" size={26} color={colors.secondary} />
+                <Text style={styles.galleryAddText}>URL</Text>
+              </Pressable>
+            </ScrollView>
           </Card>
 
           <Card style={styles.section}>
@@ -500,6 +552,14 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: spacing.md,
   },
+  sectionHeaderRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  galleryDesc: { fontSize: 12, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 17 },
+  galleryScroll: { marginTop: spacing.sm },
+  galleryItem: { marginRight: spacing.sm, position: 'relative' },
+  galleryImg: { width: 100, height: 130, borderRadius: 12, backgroundColor: colors.surfaceLight },
+  galleryRemove: { position: 'absolute', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  galleryAdd: { width: 100, height: 130, borderRadius: 12, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.border, marginRight: spacing.sm, gap: 4 },
+  galleryAddText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
   tagSection: {
     marginTop: spacing.sm,
   },
