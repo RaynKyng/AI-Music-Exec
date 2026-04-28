@@ -85,6 +85,21 @@ Your personal AI Music Executive — an end-to-end platform to develop fictional
 - Play buttons on song list cards and individual Suno generations on song detail
 - Auto-advance through queue; tap mini player to jump to song detail
 
+### 13. Audio File Upload + Library (NEW)
+- Upload `.mp3 / .wav / .m4a / .aac / .ogg / .flac / .webm` files (up to 50MB) directly on Suno generations
+- Files saved to `/app/backend/uploads/audio/` and served via `/api/audio/{filename}`
+- Each Suno generation now has BOTH a Suno page URL (for sharing) and a direct audio URL (for in-app playback)
+- New **Library** page (📚 icon on dashboard) shows every playable song in the catalog with All / Uploaded / Suno filters
+- Tap any track to play; tap Play All to queue everything
+- Shows green ✓ badge for songs with uploaded files vs Suno CDN links
+
+### 14. Re-Analyze Songs with Custom Direction (NEW)
+- "Re-analyze" button on every song's AI Prompts Gallery
+- Choose focus: All / 🎚️ Enhancements / 🎵 Styles / ✏️ Themes
+- Quick-prompt chips ("Make it cinematic", "TikTok hook", "Stripped acoustic", etc.) or type your own
+- Returns: enhancement suggestions per area (Production, Arrangement, Hook, Bridge, Vocals, Mix), alternate Suno styles (NO real-artist names), narrative directions, reference artists for inspiration, roster repositioning, next session plan, and 2-3 sentence executive summary
+- Result auto-saves to the song's AI Prompts Gallery
+
 ## Tech Stack
 - **Frontend:** Expo Router (React Native + Web), Zustand state, Pressable for cross-platform clickability, expo-image-picker, expo-clipboard.
 - **Backend:** FastAPI + Motor (MongoDB async).

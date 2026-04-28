@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Form
+from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -36,6 +37,13 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 # Create the main app
 app = FastAPI(title="AI Music Artist Manager")
+
+# Set up uploads directory
+import pathlib
+UPLOAD_DIR = pathlib.Path("/app/backend/uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+(UPLOAD_DIR / "audio").mkdir(parents=True, exist_ok=True)
+app.mount("/api/audio", StaticFiles(directory=str(UPLOAD_DIR / "audio")), name="audio")
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -120,7 +128,8 @@ class Artist(ArtistCreate):
 # Suno Generation Models
 class SunoGeneration(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    suno_url: str = ""
+    suno_url: str = ""  # the Suno page URL (e.g., https://suno.com/song/abc-123)
+    audio_url: str = ""  # direct playable audio file URL (mp3/wav/etc.) for in-app playback
     prompt_used: str = ""
     style_tags: str = ""
     rating: int = 0  # 0-5 stars
@@ -1941,6 +1950,192 @@ async def delete_saved_prompt(song_id: str, prompt_id: str, current_user: dict =
         {"$pull": {"saved_prompts": {"id": prompt_id}}, "$set": {"updated_at": datetime.utcnow()}}
     )
     return {"message": "Saved prompt deleted"}
+
+# ============== Audio File Upload + Re-Analyze ==============
+
+@api_router.post("/upload/audio")
+async def upload_audio(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    """Upload an audio file (mp3/wav/m4a/etc.) and get a playable URL back."""
+    allowed = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac", ".webm"}
+    ext = pathlib.Path(file.filename or "").suffix.lower()
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type {ext}. Allowed: {', '.join(allowed)}")
+    
+    # Generate unique filename
+    safe_id = str(uuid.uuid4())
+    filename = f"{current_user['id'][:8]}_{safe_id}{ext}"
+    path = UPLOAD_DIR / "audio" / filename
+    
+    # Stream-write the file
+    contents = await file.read()
+    if len(contents) > 50 * 1024 * 1024:  # 50MB limit
+        raise HTTPException(status_code=413, detail="File too large (max 50MB)")
+    with open(path, "wb") as f:
+        f.write(contents)
+    
+    # Return URL the player can use
+    audio_url = f"/api/audio/{filename}"
+    return {
+        "filename": filename,
+        "audio_url": audio_url,
+        "size_bytes": len(contents),
+        "original_name": file.filename,
+    }
+
+class ReAnalyzeRequest(BaseModel):
+    custom_prompt: str = ""  # optional user-supplied direction
+    focus: str = "all"  # all | enhancements | styles | themes
+
+@api_router.post("/songs/{song_id}/re-analyze")
+async def re_analyze_song(song_id: str, data: ReAnalyzeRequest, current_user: dict = Depends(get_current_user)):
+    """Re-analyze an existing song, with optional custom direction. Saves the result to saved_prompts gallery."""
+    song = await db.songs.find_one(team_query(current_user, {"id": song_id}))
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="AI not configured")
+    
+    # Build context
+    artist_context = ""
+    if song.get("artist_id"):
+        artist = await db.artists.find_one({"id": song["artist_id"]})
+        if artist:
+            artist_context = f"\nArtist: {artist.get('name','')}\nSound: {artist.get('unique_sound','')}\nGenres: {', '.join(artist.get('genres', []))}"
+    
+    roster = await db.artists.find(team_query(current_user)).to_list(100)
+    roster_summary = "\n".join([
+        f"- {a.get('name','')}: {a.get('unique_sound','')[:60]} | genres: {', '.join(a.get('genres',[]))}"
+        for a in roster
+    ]) if roster else "(no other artists)"
+    
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"reanalyze-{uuid.uuid4()}",
+            system_message=f"""You are an A&R / production consultant. Help the user enhance an existing song with concrete suggestions. Return ONLY valid JSON.
+ROSTER:
+{roster_summary}
+{artist_context}
+
+CRITICAL: Any field that ends in 'suno' or is meant to be pasted into Suno (style fields, voice keywords) MUST contain ONLY sonic descriptors — NEVER real artist names. Real artist names ARE allowed in 'enhancements', 'narrative_directions', and 'reference_artists' fields because those are for human reference."""
+        ).with_model("openai", "gpt-5.2")
+        
+        directive = "Provide a comprehensive enhancement analysis."
+        if data.focus == "enhancements":
+            directive = "Focus exclusively on production/arrangement enhancements."
+        elif data.focus == "styles":
+            directive = "Focus exclusively on Suno style prompt variations."
+        elif data.focus == "themes":
+            directive = "Focus exclusively on lyrical theme enrichment."
+        
+        prompt = f"""Re-analyze this song with the goal of suggesting enhancements:
+
+Title: {song.get('title','')}
+Current style: {song.get('style_prompt','')}
+Current genre: {song.get('genre','')}, mood: {song.get('mood','')}, tempo: {song.get('tempo','')}
+Authorship: {song.get('authorship','original')}
+Status: {song.get('status','')}
+Themes: {', '.join(song.get('themes', []))}
+Lyrics:
+{(song.get('lyrics','') or '')[:2000]}
+
+User's specific direction: {data.custom_prompt or "(no specific direction - give your best general enhancement suggestions)"}
+
+{directive}
+
+Return ONLY this JSON:
+{{
+  "enhancements": [
+    {{"area": "Production / Arrangement / Hook / Bridge / Vocal performance / Mix", "suggestion": "concrete enhancement", "reason": "why it would work for this song"}}
+  ],
+  "alternate_styles": [
+    {{"label": "what to call this variation", "suno_style": "Suno-pasteable style prompt (NO artist names)", "vibe": "1 sentence description"}}
+  ],
+  "narrative_directions": [
+    "specific direction the song could go lyrically/thematically"
+  ],
+  "reference_artists": [
+    {{"artist": "real-life artist name", "what_to_borrow": "specific element from their work that would elevate this song"}}
+  ],
+  "roster_repositioning": [
+    {{"roster_artist": "name from roster", "fit_score": "low|medium|high|perfect", "how_to_alter": "concrete tweaks to push this song toward that artist's catalog"}}
+  ],
+  "next_session_plan": ["actionable next steps for the studio session", "..."],
+  "summary": "2-3 sentence executive summary of the most important enhancements."
+}}"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        import json
+        result = None
+        try:
+            json_start = response.find('{')
+            json_end = response.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                result = json.loads(response[json_start:json_end])
+        except Exception as e:
+            logger.error(f"Re-analyze parse failed: {e}")
+            result = {"raw": response}
+        
+        # Build saved-prompt summary
+        lines = ["=== Re-Analysis ===", f"Date: {datetime.utcnow().strftime('%b %d, %Y at %H:%M UTC')}"]
+        if data.custom_prompt:
+            lines.append(f"Direction: {data.custom_prompt}")
+        lines.append("")
+        if result.get("summary"):
+            lines.append(f"Summary: {result['summary']}\n")
+        if result.get("enhancements"):
+            lines.append("--- Enhancements ---")
+            for e in result["enhancements"]:
+                if isinstance(e, dict):
+                    lines.append(f"\n{e.get('area','')}: {e.get('suggestion','')}")
+                    if e.get('reason'): lines.append(f"  Why: {e['reason']}")
+        if result.get("alternate_styles"):
+            lines.append("\n--- Alternate Suno Styles ---")
+            for s in result["alternate_styles"]:
+                if isinstance(s, dict):
+                    lines.append(f"\n{s.get('label','')}: {s.get('vibe','')}")
+                    if s.get('suno_style'): lines.append(f"  {s['suno_style']}")
+        if result.get("narrative_directions"):
+            lines.append("\n--- Narrative Directions ---")
+            for d in result["narrative_directions"]:
+                lines.append(f"- {d}")
+        if result.get("reference_artists"):
+            lines.append("\n--- Reference Artists (inspiration only) ---")
+            for r in result["reference_artists"]:
+                if isinstance(r, dict):
+                    lines.append(f"- {r.get('artist','')}: {r.get('what_to_borrow','')}")
+        if result.get("roster_repositioning"):
+            lines.append("\n--- Roster Repositioning ---")
+            for r in result["roster_repositioning"]:
+                if isinstance(r, dict):
+                    lines.append(f"- {r.get('roster_artist','')} ({r.get('fit_score','')}): {r.get('how_to_alter','')}")
+        if result.get("next_session_plan"):
+            lines.append("\n--- Next Session Plan ---")
+            for p in result["next_session_plan"]:
+                lines.append(f"\u2022 {p}")
+        summary_text = "\n".join(lines)
+        
+        # Save to saved_prompts
+        prompt_record = {
+            "id": str(uuid.uuid4()),
+            "prompt_type": "re_analysis",
+            "label": (data.custom_prompt[:40] + "...") if data.custom_prompt and len(data.custom_prompt) > 40 else (data.custom_prompt or f"Re-analysis \u00b7 {datetime.utcnow().strftime('%b %d')}"),
+            "content": summary_text,
+            "saved_by_id": current_user["id"],
+            "saved_by_name": current_user.get("name", ""),
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        await db.songs.update_one(
+            {"id": song_id},
+            {"$push": {"saved_prompts": prompt_record}, "$set": {"updated_at": datetime.utcnow()}}
+        )
+        
+        return {"analysis": result, "saved_prompt": prompt_record}
+    except Exception as e:
+        logger.error(f"Re-analyze error: {e}")
+        raise HTTPException(status_code=500, detail=f"Re-analysis failed: {str(e)}")
 
 # ============== Platform Formatting ==============
 

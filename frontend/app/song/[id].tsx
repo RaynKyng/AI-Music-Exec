@@ -36,6 +36,7 @@ export default function SongDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [showSunoModal, setShowSunoModal] = useState(false);
+  const [showReanalyze, setShowReanalyze] = useState(false);
   const [form, setForm] = useState({
     title: '',
     artist_id: null as string | null,
@@ -615,10 +616,14 @@ export default function SongDetailScreen() {
                   <View key={gen.id || i} style={styles.sunoItem}>
                     <View style={styles.sunoHeader}>
                       <Pressable onPress={() => {
-                        if (gen.suno_url) {
+                        // Prefer direct audio_url, fall back to suno_url
+                        const url = gen.audio_url || gen.suno_url;
+                        if (url) {
+                          // Resolve relative /api/audio/ paths
+                          const fullUrl = url.startsWith('/api/') ? `${process.env.EXPO_PUBLIC_BACKEND_URL}${url}` : url;
                           usePlayerStore.getState().play({
                             id: gen.id || `${id}-gen-${i}`,
-                            url: gen.suno_url,
+                            url: fullUrl,
                             title: form.title,
                             artist: artists.find(a => a.id === form.artist_id)?.name || `Generation ${i+1}`,
                             source: 'suno',
@@ -626,9 +631,11 @@ export default function SongDetailScreen() {
                           });
                         }
                       }} style={styles.playInlineBtn}>
-                        <Ionicons name="play-circle" size={22} color={colors.primary} />
+                        <Ionicons name="play-circle" size={22} color={gen.audio_url ? colors.success : colors.primary} />
                       </Pressable>
-                      <Text style={styles.sunoUrl} numberOfLines={1}>{gen.suno_url || 'No URL'}</Text>
+                      <Text style={styles.sunoUrl} numberOfLines={1}>
+                        {gen.audio_url ? `🎵 ${gen.audio_url}` : (gen.suno_url || 'No URL')}
+                      </Text>
                       {gen.is_favorite && <Ionicons name="star" size={16} color={colors.warning} />}
                       <Pressable onPress={() => {
                         Alert.alert('Delete', 'Remove this generation?', [
@@ -667,6 +674,10 @@ export default function SongDetailScreen() {
                     <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>AI Prompts Gallery ({form.saved_prompts?.length || 0})</Text>
                     <Text style={styles.sectionSub}>Suno styles, video storyboards, and chat outputs saved here.</Text>
                   </View>
+                  <Pressable style={[styles.assistantBtn, { backgroundColor: colors.warning }]} onPress={() => setShowReanalyze(true)}>
+                    <Ionicons name="refresh" size={14} color={colors.text} />
+                    <Text style={styles.assistantBtnText}>Re-analyze</Text>
+                  </Pressable>
                   <Pressable style={styles.assistantBtn} onPress={() => router.push(`/assistant?songId=${id}`)}>
                     <Ionicons name="sparkles" size={14} color={colors.text} />
                     <Text style={styles.assistantBtnText}>Assistant</Text>
@@ -868,22 +879,160 @@ export default function SongDetailScreen() {
           }}
         />
       </Modal>
+
+      <Modal visible={showReanalyze} animationType="slide" transparent onRequestClose={() => setShowReanalyze(false)}>
+        <ReanalyzeModal
+          songId={id!}
+          onClose={() => setShowReanalyze(false)}
+          onDone={async () => {
+            await loadSong();
+            setShowReanalyze(false);
+          }}
+        />
+      </Modal>
     </SafeAreaView>
+  );
+}
+
+function ReanalyzeModal({ songId, onClose, onDone }: { songId: string; onClose: () => void; onDone: () => void }) {
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [focus, setFocus] = useState<'all' | 'enhancements' | 'styles' | 'themes'>('all');
+  const [running, setRunning] = useState(false);
+
+  const handleRun = async () => {
+    setRunning(true);
+    try {
+      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${songId}/re-analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ custom_prompt: customPrompt, focus }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Re-analysis failed');
+      }
+      Alert.alert('Done!', 'New analysis saved to this song\u2019s AI Prompts Gallery. Pull down to refresh.', [
+        { text: 'OK', onPress: () => onDone() }
+      ]);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not re-analyze');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const PRESETS = [
+    "Make it more cinematic and atmospheric",
+    "Push it toward a TikTok-friendly hook",
+    "Convert to a stripped-down acoustic version",
+    "Add darker, harder-hitting trap elements",
+    "Make the hook more anthemic and memorable",
+    "Suggest a remix angle for a different audience",
+  ];
+
+  return (
+    <View style={sunoStyles.modalContainer}>
+      <View style={sunoStyles.modalContent}>
+        <View style={sunoStyles.modalHeader}>
+          <Text style={sunoStyles.modalTitle}>Re-Analyze Song</Text>
+          <Pressable onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></Pressable>
+        </View>
+        <Text style={sunoStyles.hint}>The AI will analyze this song again and suggest enhancement directions, alternate Suno styles, and roster fits. Result is saved to the AI Prompts Gallery.</Text>
+        
+        <Text style={sunoStyles.label}>Focus</Text>
+        <View style={sunoStyles.focusRow}>
+          {([
+            { key: 'all', label: 'All' },
+            { key: 'enhancements', label: '🎚️ Enhancements' },
+            { key: 'styles', label: '🎵 Styles' },
+            { key: 'themes', label: '✏️ Themes' },
+          ] as const).map(f => (
+            <Pressable key={f.key} style={[sunoStyles.focusChip, focus === f.key && sunoStyles.focusChipActive]} onPress={() => setFocus(f.key)}>
+              <Text style={[sunoStyles.focusChipText, focus === f.key && sunoStyles.focusChipTextActive]}>{f.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Text style={sunoStyles.label}>Quick prompts</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.sm }}>
+          {PRESETS.map(p => (
+            <Pressable key={p} style={sunoStyles.presetChip} onPress={() => setCustomPrompt(p)}>
+              <Text style={sunoStyles.presetText}>{p}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <Input
+          label="Custom Direction (optional)"
+          placeholder="e.g., 'make it darker and more cinematic, suggest a music video concept'"
+          value={customPrompt}
+          onChangeText={setCustomPrompt}
+          multiline
+          numberOfLines={3}
+        />
+        <Button title="Run Re-Analysis" onPress={handleRun} loading={running} icon={<Ionicons name="sparkles" size={18} color={colors.text} />} style={sunoStyles.btn} />
+      </View>
+    </View>
   );
 }
 
 function SunoGenModal({ visible, onClose, onSave }: { visible: boolean; onClose: () => void; onSave: (gen: any) => void }) {
   const [sunoUrl, setSunoUrl] = useState('');
+  const [audioUrl, setAudioUrl] = useState('');
   const [promptUsed, setPromptUsed] = useState('');
   const [rating, setRating] = useState(0);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave({ suno_url: sunoUrl, prompt_used: promptUsed, rating, notes, style_tags: '', is_favorite: false });
-    setSunoUrl(''); setPromptUsed(''); setRating(0); setNotes('');
+    await onSave({ suno_url: sunoUrl, audio_url: audioUrl, prompt_used: promptUsed, rating, notes, style_tags: '', is_favorite: false });
+    setSunoUrl(''); setAudioUrl(''); setPromptUsed(''); setRating(0); setNotes('');
     setSaving(false);
+  };
+
+  const handleUpload = async () => {
+    try {
+      const DocumentPicker = await import('expo-document-picker');
+      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*', copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.[0]) return;
+      setUploading(true);
+      const asset = result.assets[0];
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        // On web, the asset has a `file` property
+        const fileObj = (asset as any).file;
+        if (fileObj) {
+          formData.append('file', fileObj);
+        } else {
+          // Fallback: fetch the URI as blob
+          const blobRes = await fetch(asset.uri);
+          const blob = await blobRes.blob();
+          formData.append('file', blob, asset.name || 'audio.mp3');
+        }
+      } else {
+        formData.append('file', { uri: asset.uri, name: asset.name || 'audio.mp3', type: asset.mimeType || 'audio/mpeg' } as any);
+      }
+      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/upload/audio`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Upload failed');
+      }
+      const data = await res.json();
+      setAudioUrl(data.audio_url);
+      Alert.alert('Uploaded', `${asset.name} (${(data.size_bytes / 1024 / 1024).toFixed(2)} MB)`);
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message || 'Could not upload file');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -893,7 +1042,16 @@ function SunoGenModal({ visible, onClose, onSave }: { visible: boolean; onClose:
           <Text style={sunoStyles.modalTitle}>Add Suno Generation</Text>
           <Pressable onPress={onClose}><Ionicons name="close" size={24} color={colors.text} /></Pressable>
         </View>
-        <Input label="Suno URL" placeholder="https://suno.com/song/..." value={sunoUrl} onChangeText={setSunoUrl} autoCapitalize="none" />
+        <Input label="Suno Page URL (optional)" placeholder="https://suno.com/song/..." value={sunoUrl} onChangeText={setSunoUrl} autoCapitalize="none" />
+        
+        <Text style={sunoStyles.label}>Direct Audio URL (for in-app playback)</Text>
+        <Text style={sunoStyles.hint}>Paste the direct .mp3/.wav URL or upload an audio file. This is what plays in the mini player and Library.</Text>
+        <Input placeholder="https://cdn1.suno.ai/...mp3 or /api/audio/..." value={audioUrl} onChangeText={setAudioUrl} autoCapitalize="none" />
+        <Pressable style={sunoStyles.uploadBtn} onPress={handleUpload} disabled={uploading}>
+          <Ionicons name={uploading ? 'cloud-upload' : 'cloud-upload-outline'} size={18} color={colors.primary} />
+          <Text style={sunoStyles.uploadText}>{uploading ? 'Uploading...' : 'Upload audio file (MP3/WAV/M4A, up to 50MB)'}</Text>
+        </Pressable>
+        
         <Input label="Prompt Used" placeholder="The style prompt used for generation" value={promptUsed} onChangeText={setPromptUsed} multiline />
         <Text style={sunoStyles.label}>Rating</Text>
         <View style={sunoStyles.ratingRow}>
@@ -917,6 +1075,16 @@ const sunoStyles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: '600', color: colors.text },
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
   ratingRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  hint: { fontSize: 11, color: colors.textMuted, marginBottom: 6, lineHeight: 16 },
+  uploadBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 10, marginTop: 4, marginBottom: spacing.md, borderRadius: 10, backgroundColor: colors.primary + '20', borderWidth: 1, borderStyle: 'dashed', borderColor: colors.primary + '60' },
+  uploadText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+  focusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: spacing.md },
+  focusChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surfaceLight, borderWidth: 1, borderColor: colors.border },
+  focusChipActive: { backgroundColor: colors.warning, borderColor: colors.warning },
+  focusChipText: { fontSize: 11, color: colors.textSecondary, fontWeight: '600' },
+  focusChipTextActive: { color: colors.text },
+  presetChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: colors.surfaceLight, marginRight: 6 },
+  presetText: { fontSize: 11, color: colors.textSecondary },
   btn: { marginTop: spacing.md },
 });
 

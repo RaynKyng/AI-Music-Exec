@@ -57,6 +57,9 @@ export default function Dashboard() {
           <Text style={styles.userName}>{user?.name || 'Music Executive'}</Text>
         </View>
         <View style={styles.headerActions}>
+          <Pressable testID="library-btn" onPress={() => router.push('/library')} style={styles.headerIconBtn}>
+            <Ionicons name="library" size={20} color={colors.success} />
+          </Pressable>
           <Pressable testID="assistant-btn" onPress={() => router.push('/assistant')} style={styles.headerIconBtn}>
             <Ionicons name="chatbubbles" size={20} color={colors.primary} />
           </Pressable>
