@@ -529,7 +529,10 @@ async def ai_generate_artist(data: ArtistGenerateRequest, current_user: dict = D
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"artistgen-{uuid.uuid4()}",
-            system_message="""You are a creative A&R / brand strategist. Given real-life artist influences and a location, you craft an original fictional artist profile that fuses those influences into something fresh. Always ground your suggestions in real, recognizable production/sonic signatures. Return ONLY valid JSON."""
+            system_message="""You are a creative A&R / brand strategist. Given real-life artist influences and a location, you craft an original fictional artist profile that fuses those influences into something fresh. Always ground your suggestions in real, recognizable production/sonic signatures. Return ONLY valid JSON.
+
+CRITICAL COPYRIGHT RULE FOR SUNO PROMPTS:
+The fields `suno_style_template`, `suno_voice_suggestion`, and `first_3_song_ideas[].suno_style` MUST NEVER contain real artist names. Use only sonic descriptors (e.g., "melodic emo rap, autotuned cracked vocals, atmospheric trap drums, foggy synths, 808 sub bass, distorted hooks, BPM 75-90"). Real artist names ARE allowed in `bio`, `backstory`, `synthesized_profile`, and `influence_breakdown` because those are internal references."""
         ).with_model("openai", "gpt-5.2")
         
         prompt_parts = []

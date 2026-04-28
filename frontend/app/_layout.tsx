@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, StyleSheet } from 'react-native';
 import { useAuthStore } from '../src/stores/authStore';
+import { MiniPlayer } from '../src/components/MiniPlayer';
 import { colors } from '../src/utils/theme';
 
 export default function RootLayout() {
@@ -22,6 +23,7 @@ export default function RootLayout() {
           animation: 'slide_from_right',
         }}
       />
+      <MiniPlayer />
     </View>
   );
 }

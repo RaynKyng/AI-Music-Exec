@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useDataStore } from '../../src/stores/dataStore';
+import { usePlayerStore } from '../../src/stores/playerStore';
 import { Card } from '../../src/components/Card';
 import { StatusBadge } from '../../src/components/StatusBadge';
 import { SearchBar } from '../../src/components/SearchBar';
@@ -232,7 +233,15 @@ export default function SongsScreen() {
                     e.stopPropagation();
                     const url = song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)?.suno_link;
                     if (url) {
-                      Linking.openURL(url);
+                      const artist = artists.find(a => a.id === song.artist_id);
+                      usePlayerStore.getState().play({
+                        id: song.id,
+                        url,
+                        title: song.title,
+                        artist: artist?.name || '',
+                        source: 'song',
+                        source_id: song.id,
+                      });
                     }
                   }}>
                     <Ionicons name="play-circle" size={28} color={colors.primary} />

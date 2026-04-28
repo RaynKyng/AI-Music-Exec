@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useDataStore } from '../../src/stores/dataStore';
+import { usePlayerStore } from '../../src/stores/playerStore';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
@@ -613,7 +614,20 @@ export default function SongDetailScreen() {
                 {(form.suno_generations || []).map((gen: any, i: number) => (
                   <View key={gen.id || i} style={styles.sunoItem}>
                     <View style={styles.sunoHeader}>
-                      <Ionicons name="link" size={16} color={colors.primary} />
+                      <Pressable onPress={() => {
+                        if (gen.suno_url) {
+                          usePlayerStore.getState().play({
+                            id: gen.id || `${id}-gen-${i}`,
+                            url: gen.suno_url,
+                            title: form.title,
+                            artist: artists.find(a => a.id === form.artist_id)?.name || `Generation ${i+1}`,
+                            source: 'suno',
+                            source_id: id!,
+                          });
+                        }
+                      }} style={styles.playInlineBtn}>
+                        <Ionicons name="play-circle" size={22} color={colors.primary} />
+                      </Pressable>
                       <Text style={styles.sunoUrl} numberOfLines={1}>{gen.suno_url || 'No URL'}</Text>
                       {gen.is_favorite && <Ionicons name="star" size={16} color={colors.warning} />}
                       <Pressable onPress={() => {
@@ -973,6 +987,7 @@ const styles = StyleSheet.create({
   authorshipChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   authorshipChipText: { fontSize: 11, fontWeight: '600', color: colors.textSecondary },
   authorshipChipTextActive: { color: colors.text },
+  playInlineBtn: { padding: 2 },
   label: {
     fontSize: 14,
     fontWeight: '600',

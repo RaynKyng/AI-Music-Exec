@@ -67,6 +67,24 @@ Your personal AI Music Executive — an end-to-end platform to develop fictional
 ### 9. Collaborative Comments
 - Each artist / song / idea has its own comments thread for back-and-forth notes between team members.
 
+### 10. AI Artist Generator (NEW)
+- Brief form: location, real-life influences (chip-input), genre hints, vibe, custom direction
+- Returns: 3-5 name suggestions, bio + backstory, sonic signature, branding (palette, mood, visual style), Suno voice + style template, **influence breakdown** (signature sound + what we pull + what we drop per influence), 3 starter song ideas, recurring themes, synthesized recipe
+- Tap "Add to Roster" → artist created with full generation log saved to their AI Prompts Gallery
+- "Suno" fields are guaranteed name-free (sonic descriptors only) for copyright-safe pasting
+
+### 11. Quick Add Analyzer Upgrades (NEW)
+- Real-life artist fit suggestions (with reference tracks)
+- Per-roster-artist fit analysis (low/medium/high/perfect + how to alter the song)
+- Left-field inspiration that opens the AI Artist Generator pre-filled
+
+### 12. In-App Audio Player (NEW)
+- Cross-platform (web HTML audio + native expo-audio)
+- Mini player floats above tab bar; persists across screens
+- Direct audio file URLs play in-app; page URLs (suno.com/song/...) gracefully fall back to opening externally
+- Play buttons on song list cards and individual Suno generations on song detail
+- Auto-advance through queue; tap mini player to jump to song detail
+
 ## Tech Stack
 - **Frontend:** Expo Router (React Native + Web), Zustand state, Pressable for cross-platform clickability, expo-image-picker, expo-clipboard.
 - **Backend:** FastAPI + Motor (MongoDB async).
