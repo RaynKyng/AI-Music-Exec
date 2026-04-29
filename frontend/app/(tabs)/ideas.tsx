@@ -190,12 +190,18 @@ export default function IdeasScreen() {
                     {idea.type}
                   </Text>
                 </View>
+                <View dataSet={{ stopParent: 'true' }}>
                 <TouchableOpacity
                   style={styles.deleteBtn}
-                  onPress={() => handleDelete(idea)}
+                  onPress={(e: any) => {
+                    e?.stopPropagation?.();
+                    handleDelete(idea);
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                   <Ionicons name="close" size={18} color={colors.textMuted} />
                 </TouchableOpacity>
+                </View>
               </View>
               <Text style={styles.ideaTitle}>{idea.title}</Text>
               {idea.content && (

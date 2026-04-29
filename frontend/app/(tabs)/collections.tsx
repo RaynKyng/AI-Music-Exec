@@ -140,9 +140,11 @@ export default function CollectionsScreen() {
                     <Text style={[styles.statusLabel, { color: statusColor(coll.status) }]}>{coll.status.replace('_', ' ')}</Text>
                   </View>
                 </View>
+                <View dataSet={{ stopParent: 'true' }}>
                 <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(coll); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
                 </Pressable>
+                </View>
               </View>
               <View style={styles.trackCount}>
                 <Ionicons name="musical-notes" size={14} color={colors.textSecondary} />

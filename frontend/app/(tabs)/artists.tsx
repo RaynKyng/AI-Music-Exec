@@ -165,9 +165,11 @@ export default function ArtistsScreen() {
                   <Text style={styles.artistName}>{artist.name}</Text>
                   <Text style={styles.artistGenres}>{artist.genres.join(' \u2022 ') || 'No genres'}</Text>
                 </View>
+                <View dataSet={{ stopParent: 'true' }}>
                 <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(artist); }}>
                   <Ionicons name="trash-outline" size={20} color={colors.error} />
                 </Pressable>
+                </View>
               </View>
               {artist.unique_sound ? <Text style={styles.artistSound} numberOfLines={2}>{artist.unique_sound}</Text> : null}
               <View style={styles.artistFooter}>

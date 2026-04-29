@@ -229,6 +229,7 @@ export default function SongsScreen() {
 
                 {/* Play button - shows if any suno link exists */}
                 {(song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)) && (
+                  <View dataSet={{ stopParent: 'true' }}>
                   <Pressable style={styles.playBtn} onPress={(e) => {
                     e.stopPropagation();
                     const url = song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)?.suno_link;
@@ -246,11 +247,14 @@ export default function SongsScreen() {
                   }}>
                     <Ionicons name="play-circle" size={28} color={colors.primary} />
                   </Pressable>
+                  </View>
                 )}
 
+                <View dataSet={{ stopParent: 'true' }}>
                 <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(song); }}>
                   <Ionicons name="trash-outline" size={18} color={colors.error} />
                 </Pressable>
+                </View>
               </View>
             </Card>
           ))
