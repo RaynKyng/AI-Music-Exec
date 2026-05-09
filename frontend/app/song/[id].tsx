@@ -64,6 +64,7 @@ export default function SongDetailScreen() {
   const [collections, setCollections] = useState<any[]>([]);
   const [themeInput, setThemeInput] = useState('');
   const [todoInput, setTodoInput] = useState('');
+  const [expandedPromptId, setExpandedPromptId] = useState<string | null>(null);
   const [newVersion, setNewVersion] = useState({
     version_type: 'primary' as 'primary' | 'secondary' | 'alternate',
     version_label: '',
@@ -720,7 +721,29 @@ export default function SongDetailScreen() {
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
                         </Pressable>
                       </View>
-                      <Text style={styles.promptContent} numberOfLines={6}>{p.content}</Text>
+                      <Pressable
+                        onPress={() => setExpandedPromptId(expandedPromptId === p.id ? null : p.id)}
+                        style={styles.promptContentWrap}
+                      >
+                        <Text
+                          style={styles.promptContent}
+                          numberOfLines={expandedPromptId === p.id ? undefined : 6}
+                        >
+                          {p.content}
+                        </Text>
+                        {(p.content?.length || 0) > 280 && (
+                          <View style={styles.promptExpandHint}>
+                            <Ionicons
+                              name={expandedPromptId === p.id ? 'chevron-up' : 'chevron-down'}
+                              size={14}
+                              color={colors.primary}
+                            />
+                            <Text style={styles.promptExpandText}>
+                              {expandedPromptId === p.id ? 'Tap to collapse' : 'Tap to read full prompt'}
+                            </Text>
+                          </View>
+                        )}
+                      </Pressable>
                       {p.saved_by_name ? <Text style={styles.promptMeta}>Saved by {p.saved_by_name}</Text> : null}
                     </View>
                   ))
@@ -1222,6 +1245,9 @@ const styles = StyleSheet.create({
   promptLabel: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.text },
   promptIcon: { padding: 4 },
   promptContent: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  promptContentWrap: { paddingVertical: 4 },
+  promptExpandHint: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border + '40' },
+  promptExpandText: { fontSize: 11, color: colors.primary, fontWeight: '600' },
   promptMeta: { fontSize: 10, color: colors.textMuted, marginTop: 4, fontStyle: 'italic' },
   authorshipRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   authorshipLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },

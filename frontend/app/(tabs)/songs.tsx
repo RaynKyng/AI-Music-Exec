@@ -34,8 +34,21 @@ export default function SongsScreen() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [collections, setCollections] = useState<any[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
 
   useEffect(() => { fetchSongs(); fetchArtists(); loadCollections(); }, []);
+
+  // Persist view mode
+  useEffect(() => {
+    AsyncStorage.getItem('songsViewMode').then((v) => {
+      if (v === 'list' || v === 'cards') setViewMode(v);
+    });
+  }, []);
+  const toggleViewMode = () => {
+    const next = viewMode === 'list' ? 'cards' : 'list';
+    setViewMode(next);
+    AsyncStorage.setItem('songsViewMode', next);
+  };
 
   const loadCollections = async () => {
     try {
@@ -104,6 +117,18 @@ export default function SongsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Song Catalog</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            testID="view-toggle-btn"
+            style={styles.viewToggleBtn}
+            onPress={toggleViewMode}
+            accessibilityLabel={viewMode === 'list' ? 'Switch to card view' : 'Switch to list view'}
+          >
+            <Ionicons
+              name={viewMode === 'list' ? 'grid-outline' : 'list-outline'}
+              size={20}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
           <TouchableOpacity testID="quick-add-btn" style={styles.quickAddButton} onPress={() => router.push('/song/quick-add')}>
             <Ionicons name="sparkles" size={18} color={colors.text} />
             <Text style={styles.quickAddText}>Quick AI</Text>
@@ -164,6 +189,74 @@ export default function SongsScreen() {
                 <Text style={[styles.emptyButtonText, { color: colors.primary }]}>Import CSV</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        ) : viewMode === 'list' ? (
+          // === COMPACT LIST VIEW (default) ===
+          <View style={styles.listContainer}>
+            {songs.map((song) => {
+              const playUrl = song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)?.suno_link;
+              return (
+                <Pressable
+                  key={song.id}
+                  style={({ pressed }) => [styles.listRow, pressed && styles.listRowPressed]}
+                  onPress={(e: any) => {
+                    try {
+                      const tgt = e?.nativeEvent?.target as HTMLElement | undefined;
+                      if (tgt && typeof tgt.closest === 'function' && tgt.closest('[data-stop-parent="true"]')) return;
+                    } catch {}
+                    router.push(`/song/${song.id}`);
+                  }}
+                >
+                  <View style={styles.listRowLeft}>
+                    <Text style={styles.listTitle} numberOfLines={1}>{song.title}</Text>
+                    <Text style={styles.listSubtitle} numberOfLines={1}>
+                      {getArtistName(song.artist_id)}
+                      {(song as any).featured_artist_ids?.length > 0 && ` ft. ${(song as any).featured_artist_ids.map((id: string) => getArtistName(id)).join(', ')}`}
+                      {(song as any).collection_id && ` • ${collections.find(c => c.id === (song as any).collection_id)?.title || 'Release'}`}
+                    </Text>
+                  </View>
+                  <View style={styles.listRowRight}>
+                    <View style={styles.listStatusBadge}>
+                      <StatusBadge status={song.status} />
+                    </View>
+                    {playUrl && (
+                      <View dataSet={{ stopParent: 'true' }}>
+                        <Pressable
+                          style={styles.listIconBtn}
+                          hitSlop={6}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            const artist = artists.find(a => a.id === song.artist_id);
+                            usePlayerStore.getState().play({
+                              id: song.id,
+                              url: playUrl,
+                              title: song.title,
+                              artist: artist?.name || '',
+                              source: 'song',
+                              source_id: song.id,
+                            });
+                          }}
+                        >
+                          <Ionicons name="play-circle" size={22} color={colors.primary} />
+                        </Pressable>
+                      </View>
+                    )}
+                    <View dataSet={{ stopParent: 'true' }}>
+                      <Pressable
+                        style={styles.listIconBtn}
+                        hitSlop={6}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          handleDelete(song);
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={colors.error} />
+                      </Pressable>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         ) : (
           songs.map((song) => (
@@ -339,6 +432,17 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   importButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
+  viewToggleBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  // Compact list view
+  listContainer: { backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border + '60', minHeight: 56 },
+  listRowPressed: { backgroundColor: colors.surfaceLight },
+  listRowLeft: { flex: 1, marginRight: 8, gap: 2 },
+  listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  listSubtitle: { fontSize: 12, color: colors.textMuted },
+  listRowRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  listStatusBadge: { transform: [{ scale: 0.85 }], marginRight: 2 },
+  listIconBtn: { padding: 6, borderRadius: 8 },
   quickAddButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary },
   quickAddText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
