@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Pressable, Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,8 +27,21 @@ export default function ArtistsScreen() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('name_asc');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
 
   useEffect(() => { fetchArtists(); }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('artistsViewMode').then((v) => {
+      if (v === 'list' || v === 'cards') setViewMode(v);
+    });
+  }, []);
+
+  const toggleViewMode = () => {
+    const next = viewMode === 'list' ? 'cards' : 'list';
+    setViewMode(next);
+    AsyncStorage.setItem('artistsViewMode', next);
+  };
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -86,6 +100,14 @@ export default function ArtistsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Artist Roster</Text>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            testID="view-toggle-btn"
+            style={styles.viewToggleBtn}
+            onPress={toggleViewMode}
+            accessibilityLabel={viewMode === 'list' ? 'Switch to card view' : 'Switch to list view'}
+          >
+            <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={20} color={colors.primary} />
+          </TouchableOpacity>
           <TouchableOpacity testID="ai-generate-artist-btn" style={styles.aiGenButton} onPress={() => router.push('/artist/ai-generate')}>
             <Ionicons name="sparkles" size={16} color={colors.primary} />
             <Text style={styles.aiGenText}>AI Generate</Text>
@@ -150,6 +172,51 @@ export default function ArtistsScreen() {
               </TouchableOpacity>
             )}
           </View>
+        ) : viewMode === 'list' ? (
+          // === COMPACT LIST VIEW (default) ===
+          <View style={styles.listContainer}>
+            {displayArtists.map((artist) => (
+              <Pressable
+                key={artist.id}
+                style={({ pressed }) => [styles.listRow, pressed && styles.listRowPressed]}
+                onPress={(e: any) => {
+                  try {
+                    const tgt = e?.nativeEvent?.target as HTMLElement | undefined;
+                    if (tgt && typeof tgt.closest === 'function' && tgt.closest('[data-stop-parent="true"]')) return;
+                  } catch {}
+                  router.push(`/artist/${artist.id}`);
+                }}
+              >
+                {(artist as any).profile_image || artist.image_url ? (
+                  <Image source={{ uri: (artist as any).profile_image || artist.image_url }} style={styles.listAvatar} />
+                ) : (
+                  <View style={[styles.listAvatar, styles.avatarPlaceholder]}>
+                    <Text style={styles.listAvatarText}>{artist.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={styles.listRowLeft}>
+                  <Text style={styles.listTitle} numberOfLines={1}>{artist.name}</Text>
+                  <Text style={styles.listSubtitle} numberOfLines={1}>
+                    {artist.song_count || 0} {(artist.song_count || 0) === 1 ? 'song' : 'songs'}
+                    {artist.genres?.length > 0 && ` • ${artist.genres.slice(0, 2).join(', ')}`}
+                    {artist.genres?.length > 2 && ` +${artist.genres.length - 2}`}
+                  </Text>
+                </View>
+                <View dataSet={{ stopParent: 'true' }}>
+                  <Pressable
+                    style={styles.listIconBtn}
+                    hitSlop={6}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      handleDelete(artist);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                  </Pressable>
+                </View>
+              </Pressable>
+            ))}
+          </View>
         ) : (
           displayArtists.map((artist) => (
             <Card key={artist.id} style={styles.artistCard} onPress={() => router.push(`/artist/${artist.id}`)}>
@@ -162,8 +229,8 @@ export default function ArtistsScreen() {
                   </View>
                 )}
                 <View style={styles.artistInfo}>
-                  <Text style={styles.artistName}>{artist.name}</Text>
-                  <Text style={styles.artistGenres}>{artist.genres.join(' \u2022 ') || 'No genres'}</Text>
+                  <Text style={styles.artistName} numberOfLines={1}>{artist.name}</Text>
+                  <Text style={styles.artistGenres} numberOfLines={1}>{artist.genres.join(' \u2022 ') || 'No genres'}</Text>
                 </View>
                 <View dataSet={{ stopParent: 'true' }}>
                 <Pressable style={styles.deleteBtn} onPress={(e) => { e.stopPropagation(); handleDelete(artist); }}>
@@ -179,13 +246,13 @@ export default function ArtistsScreen() {
                 </View>
                 {artist.tone ? (
                   <View style={styles.toneBadge}>
-                    <Text style={styles.toneText}>{artist.tone}</Text>
+                    <Text style={styles.toneText} numberOfLines={1}>{artist.tone}</Text>
                   </View>
                 ) : null}
                 {artist.themes.length > 0 && (
                   <View style={styles.themes}>
                     {artist.themes.slice(0, 2).map((theme, i) => (
-                      <View key={i} style={styles.themeBadge}><Text style={styles.themeText}>{theme}</Text></View>
+                      <View key={i} style={styles.themeBadge}><Text style={styles.themeText} numberOfLines={1}>{theme}</Text></View>
                     ))}
                   </View>
                 )}
@@ -203,6 +270,17 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  viewToggleBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  // Compact list view
+  listContainer: { backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border + '60', minHeight: 60, gap: 12 },
+  listRowPressed: { backgroundColor: colors.surfaceLight },
+  listAvatar: { width: 40, height: 40, borderRadius: 20 },
+  listAvatarText: { fontSize: 16, fontWeight: '700', color: colors.text },
+  listRowLeft: { flex: 1, gap: 2 },
+  listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  listSubtitle: { fontSize: 12, color: colors.textMuted },
+  listIconBtn: { padding: 6, borderRadius: 8 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   aiGenButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary },
   aiGenText: { fontSize: 12, color: colors.primary, fontWeight: '600' },

@@ -28,8 +28,21 @@ export default function CollectionsScreen() {
   const [form, setForm] = useState({ title: '', artist_id: '', collection_type: 'EP', description: '', cover_image_url: '', status: 'in_progress', notes: '' });
   const [saving, setSaving] = useState(false);
   const [activeView, setActiveView] = useState<'releases' | 'playlists'>('releases');
+  const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
 
   useEffect(() => { fetchArtists(); loadCollections(); }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem('collectionsViewMode').then((v) => {
+      if (v === 'list' || v === 'cards') setViewMode(v);
+    });
+  }, []);
+
+  const toggleViewMode = () => {
+    const next = viewMode === 'list' ? 'cards' : 'list';
+    setViewMode(next);
+    AsyncStorage.setItem('collectionsViewMode', next);
+  };
 
   const authFetch = async (url: string, options: RequestInit = {}) => {
     const token = await AsyncStorage.getItem('token');
@@ -79,12 +92,22 @@ export default function CollectionsScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>{activeView === 'playlists' ? 'Playlists' : 'Releases'}</Text>
-        <Pressable testID="add-collection-btn" style={styles.addButton} onPress={() => {
-          setForm({ ...form, collection_type: activeView === 'playlists' ? 'Playlist' : 'EP' });
-          setModalVisible(true);
-        }}>
-          <Ionicons name="add" size={24} color={colors.text} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <Pressable
+            testID="view-toggle-btn"
+            style={styles.viewToggleBtn}
+            onPress={toggleViewMode}
+            accessibilityLabel={viewMode === 'list' ? 'Switch to card view' : 'Switch to list view'}
+          >
+            <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={20} color={colors.primary} />
+          </Pressable>
+          <Pressable testID="add-collection-btn" style={styles.addButton} onPress={() => {
+            setForm({ ...form, collection_type: activeView === 'playlists' ? 'Playlist' : 'EP' });
+            setModalVisible(true);
+          }}>
+            <Ionicons name="add" size={24} color={colors.text} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.viewToggle}>
@@ -117,6 +140,50 @@ export default function CollectionsScreen() {
               <Text style={styles.emptyButtonText}>{activeView === 'playlists' ? 'New Playlist' : 'New Release'}</Text>
             </Pressable>
           </View>
+        ) : viewMode === 'list' ? (
+          // === COMPACT LIST VIEW ===
+          <View style={styles.listContainer}>
+            {filtered.map((coll) => (
+              <Pressable
+                key={coll.id}
+                style={({ pressed }) => [styles.listRow, pressed && styles.listRowPressed]}
+                onPress={(e: any) => {
+                  try {
+                    const tgt = e?.nativeEvent?.target as HTMLElement | undefined;
+                    if (tgt && typeof tgt.closest === 'function' && tgt.closest('[data-stop-parent="true"]')) return;
+                  } catch {}
+                  router.push(`/collection/${coll.id}`);
+                }}
+              >
+                {coll.cover_image_url ? (
+                  <Image source={{ uri: coll.cover_image_url }} style={styles.listCover} />
+                ) : (
+                  <View style={[styles.listCover, styles.coverPlaceholder]}>
+                    <Ionicons name="albums" size={20} color={colors.textMuted} />
+                  </View>
+                )}
+                <View style={styles.listRowLeft}>
+                  <Text style={styles.listTitle} numberOfLines={1}>{coll.title}</Text>
+                  <Text style={styles.listSubtitle} numberOfLines={1}>
+                    {getArtistName(coll.artist_id)} • {coll.collection_type} • {coll.track_count || 0} {(coll.track_count || 0) === 1 ? 'track' : 'tracks'}
+                  </Text>
+                </View>
+                <View style={[styles.statusDot, { backgroundColor: statusColor(coll.status) }]} />
+                <View dataSet={{ stopParent: 'true' }}>
+                  <Pressable
+                    style={styles.listIconBtn}
+                    hitSlop={6}
+                    onPress={(e) => {
+                      e.stopPropagation?.();
+                      handleDelete(coll);
+                    }}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.error} />
+                  </Pressable>
+                </View>
+              </Pressable>
+            ))}
+          </View>
         ) : (
           filtered.map((coll) => (
             <Card key={coll.id} style={styles.collCard} onPress={() => router.push(`/collection/${coll.id}`)}>
@@ -129,14 +196,14 @@ export default function CollectionsScreen() {
                   </View>
                 )}
                 <View style={styles.collInfo}>
-                  <Text style={styles.collTitle}>{coll.title}</Text>
-                  <Text style={styles.collArtist}>{getArtistName(coll.artist_id)}</Text>
+                  <Text style={styles.collTitle} numberOfLines={1}>{coll.title}</Text>
+                  <Text style={styles.collArtist} numberOfLines={1}>{getArtistName(coll.artist_id)}</Text>
                   <View style={styles.collMeta}>
                     <View style={[styles.typeBadge, { backgroundColor: colors.surfaceLight }]}>
                       <Text style={styles.typeText}>{coll.collection_type}</Text>
                     </View>
                     <View style={[styles.statusDot, { backgroundColor: statusColor(coll.status) }]} />
-                    <Text style={[styles.statusLabel, { color: statusColor(coll.status) }]}>{coll.status.replace('_', ' ')}</Text>
+                    <Text style={[styles.statusLabel, { color: statusColor(coll.status) }]} numberOfLines={1}>{coll.status.replace('_', ' ')}</Text>
                   </View>
                 </View>
                 <View dataSet={{ stopParent: 'true' }}>
@@ -195,6 +262,16 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   title: { fontSize: 28, fontWeight: '700', color: colors.text },
   addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  viewToggleBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
+  // Compact list view
+  listContainer: { backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
+  listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border + '60', minHeight: 60, gap: 10 },
+  listRowPressed: { backgroundColor: colors.surfaceLight },
+  listCover: { width: 44, height: 44, borderRadius: 6 },
+  listRowLeft: { flex: 1, gap: 2 },
+  listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  listSubtitle: { fontSize: 12, color: colors.textMuted },
+  listIconBtn: { padding: 6, borderRadius: 8 },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.md },
   viewToggle: { flexDirection: 'row', paddingHorizontal: spacing.lg, gap: spacing.sm, marginBottom: spacing.sm },
   toggleChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 14, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
