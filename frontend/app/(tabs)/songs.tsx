@@ -14,6 +14,7 @@ import { StatusBadge } from '../../src/components/StatusBadge';
 import { SearchBar } from '../../src/components/SearchBar';
 import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/utils/theme';
+import { confirmDestructive } from '../../src/utils/confirm';
 import { Song } from '../../src/types';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -68,10 +69,11 @@ export default function SongsScreen() {
   };
 
   const handleDelete = (song: Song) => {
-    Alert.alert('Delete Song', `Delete "${song.title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteSong(song.id).catch(() => Alert.alert('Error', 'Failed')) },
-    ]);
+    confirmDestructive(`Delete "${song.title}"?`, 'Delete Song').then((ok) => {
+      if (ok) {
+        deleteSong(song.id).catch(() => Alert.alert('Error', 'Failed'));
+      }
+    });
   };
 
   const handleCSVImport = async () => {

@@ -9,6 +9,7 @@ import { useDataStore } from '../../src/stores/dataStore';
 import { Card } from '../../src/components/Card';
 import { SearchBar } from '../../src/components/SearchBar';
 import { colors, spacing } from '../../src/utils/theme';
+import { confirmDestructive } from '../../src/utils/confirm';
 import { Artist } from '../../src/types';
 
 const SORT_OPTIONS = [
@@ -75,10 +76,9 @@ export default function ArtistsScreen() {
   }, [artists, sortBy, genreFilter]);
 
   const handleDelete = (artist: Artist) => {
-    Alert.alert('Delete Artist', `Delete ${artist.name}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => deleteArtist(artist.id).catch(() => Alert.alert('Error', 'Failed')) },
-    ]);
+    confirmDestructive(`Delete ${artist.name}?`, 'Delete Artist').then((ok) => {
+      if (ok) deleteArtist(artist.id).catch(() => Alert.alert('Error', 'Failed'));
+    });
   };
 
   return (

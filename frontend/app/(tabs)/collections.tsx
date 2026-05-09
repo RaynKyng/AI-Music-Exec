@@ -13,6 +13,7 @@ import { Button } from '../../src/components/Button';
 import { SearchBar } from '../../src/components/SearchBar';
 import { useDataStore } from '../../src/stores/dataStore';
 import { colors, spacing } from '../../src/utils/theme';
+import { confirmDestructive } from '../../src/utils/confirm';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
@@ -59,13 +60,11 @@ export default function CollectionsScreen() {
   };
 
   const handleDelete = (coll: any) => {
-    Alert.alert('Delete', `Delete "${coll.title}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        await authFetch(`${API_URL}/api/collections/${coll.id}`, { method: 'DELETE' });
-        loadCollections();
-      }},
-    ]);
+    confirmDestructive(`Delete "${coll.title}"?`, 'Delete Collection').then(async (ok) => {
+      if (!ok) return;
+      await authFetch(`${API_URL}/api/collections/${coll.id}`, { method: 'DELETE' });
+      loadCollections();
+    });
   };
 
   const getArtistName = (id: string) => artists.find(a => a.id === id)?.name || 'Unknown';

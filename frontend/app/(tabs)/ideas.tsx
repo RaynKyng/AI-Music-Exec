@@ -12,6 +12,7 @@ import { Button } from '../../src/components/Button';
 import { Input } from '../../src/components/Input';
 import { SearchBar } from '../../src/components/SearchBar';
 import { colors, spacing, ideaTypeColors } from '../../src/utils/theme';
+import { confirmDestructive } from '../../src/utils/confirm';
 import { Idea } from '../../src/types';
 
 const IDEA_TYPES = ['all', 'spark', 'concept', 'lyrics', 'melody', 'style', 'visual'];
@@ -64,24 +65,14 @@ export default function IdeasScreen() {
   };
 
   const handleDelete = (idea: Idea) => {
-    Alert.alert(
-      'Delete Idea',
-      `Delete "${idea.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteIdea(idea.id);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete idea');
-            }
-          },
-        },
-      ]
-    );
+    confirmDestructive(`Delete "${idea.title}"?`, 'Delete Idea').then(async (ok) => {
+      if (!ok) return;
+      try {
+        await deleteIdea(idea.id);
+      } catch (error) {
+        Alert.alert('Error', 'Failed to delete idea');
+      }
+    });
   };
 
   return (

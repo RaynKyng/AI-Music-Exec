@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Card } from '../src/components/Card';
 import { useDataStore } from '../src/stores/dataStore';
 import { colors, spacing } from '../src/utils/theme';
+import { confirmDestructive, confirmAction } from '../src/utils/confirm';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -45,45 +46,40 @@ export default function TrashScreen() {
   };
 
   const restore = (type: string, item: any) => {
-    Alert.alert(
-      'Restore?',
+    confirmAction(
       `"${item.name || item.title}" will be restored and visible again in your catalog.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Restore', onPress: async () => {
-          setBusyId(item.id);
-          try {
-            const res = await authFetch(`/api/trash/${type}/${item.id}/restore`, { method: 'POST' });
-            if (res.ok) {
-              await refreshAll();
-            } else {
-              Alert.alert('Error', 'Could not restore');
-            }
-          } finally {
-            setBusyId(null);
-          }
-        }},
-      ]
-    );
+      'Restore?',
+      'Restore'
+    ).then(async (ok) => {
+      if (!ok) return;
+      setBusyId(item.id);
+      try {
+        const res = await authFetch(`/api/trash/${type}/${item.id}/restore`, { method: 'POST' });
+        if (res.ok) {
+          await refreshAll();
+        } else {
+          Alert.alert('Error', 'Could not restore');
+        }
+      } finally {
+        setBusyId(null);
+      }
+    });
   };
 
   const permanentDelete = (type: string, item: any) => {
-    Alert.alert(
-      'Delete forever?',
+    confirmDestructive(
       `"${item.name || item.title}" will be permanently deleted. This CANNOT be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete forever', style: 'destructive', onPress: async () => {
-          setBusyId(item.id);
-          try {
-            const res = await authFetch(`/api/trash/${type}/${item.id}/permanent`, { method: 'DELETE' });
-            if (res.ok) await loadTrash();
-          } finally {
-            setBusyId(null);
-          }
-        }},
-      ]
-    );
+      'Delete forever?'
+    ).then(async (ok) => {
+      if (!ok) return;
+      setBusyId(item.id);
+      try {
+        const res = await authFetch(`/api/trash/${type}/${item.id}/permanent`, { method: 'DELETE' });
+        if (res.ok) await loadTrash();
+      } finally {
+        setBusyId(null);
+      }
+    });
   };
 
   const tabs = [
