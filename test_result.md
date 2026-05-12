@@ -290,12 +290,20 @@ frontend:
         comment: "PASS 28/28 (see /app/backend_push_test.py). POST /api/users/push-token: 200+ok=true on register, de-duplicates (2 calls same token → 1 token in users.expo_push_tokens), 400 on empty push_token, 422 on missing field, 403 without auth. DELETE /api/users/push-token: 200+ok=true on existing, 200 on non-existent (idempotent), 403 without auth. POST /api/notifications/test: 400 when 0 tokens registered, 200 {ok:true,sent:1,tokens:1} after register — confirmed real Expo API call (https://exp.host/--/api/v2/push/send) succeeds and returns DeviceNotRegistered ticket for fake ExponentPushToken (logged: 'push_service - INFO - Removing dead Expo token: ExponentPushToken[abc123-fake-...'); endpoint correctly returns 200 not 500. CRUD regressions all pass — POST /songs, PUT /songs (status change), POST /ideas (newly logs activity), POST /comments (newly logs activity), POST /songs/{id}/re-analyze (200 with Emergent LLM, push hook does not 500). GET /songs/{id}/activity returns full timeline including created/updated/commented/reanalyzed actions. Notify-team flow verified: A generates invite code, B joins via /team/join, both share team_id, B registers push token, A creates song → log_activity fires push_service.notify_team to B (HTTP egress to Expo with DeviceNotRegistered ticket logged), song creation returns 200, activity doc persisted in db.activities. B leaves team cleanly. NO REGRESSIONS observed in any existing CRUD path due to push_service import or activity hook."
 
 test_plan:
-  current_focus:
-    - "Frontend smoke: delete, edit, and navigation buttons across Songs, Artists, Collections (Releases + Playlists), Ideas, and Trash"
-    - "Card stop-parent defense-in-depth fix"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend_projection_regression_2026_05:
+  - task: "DB query projections (artists/songs/ideas/ai-assistant/log_activity team-size)"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "PASS 24/24 in /app/backend_projection_test.py against public preview URL. (A) GET /api/artists returns all Artist fields (name, bio, unique_sound, genres, themes, tone, patterns, branding, image_url, profile_image, character_images, visual_brief, visual_references, suno_voice, suno_exclusions, notes, is_private, song_count, created_at, updated_at, saved_prompts) and saved_prompts == [] from Pydantic default after projection drops it; no _id leaks. (B) GET /api/artists/{id} STILL returns saved_prompts key (detail not projected) — verified for ALPHiiN. (C) GET /api/songs returns full Song fields including lyrics/versions/suno_generations/themes; saved_prompts == [] in list view; no _id. (D) GET /api/songs/{id} STILL has saved_prompts key. (E) GET /api/ideas 200 (empty initially); after POST /api/ideas the created idea contains all Idea fields. (F) POST /api/ai/assistant with artist_id=ALPHiiN returned 200 with {response, session_id} — the leaner artist_songs projection ({_id:0, saved_prompts:0, versions:0, suno_generations:0}) does NOT crash the endpoint; LLM generated a coherent hook in ALPHiiN's voice. (G) Creates that hit log_activity → team-size find().limit(2) all return 200: POST /api/artists 200, POST /api/songs 200, POST /api/ideas 200, POST /api/comments 200. Newly created artist appears in /api/artists list with saved_prompts == []. CRITICAL VERIFIED: Pydantic Artist/Song/Idea models construct successfully when saved_prompts is absent from the dict (default [] fires). No regressions observed."
 
 frontend_smoke_2026_04:
   - task: "Bottom Tab Navigation (Home, Artists, Songs, Releases, Ideas, AI)"

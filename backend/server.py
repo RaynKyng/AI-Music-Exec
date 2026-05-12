@@ -780,7 +780,8 @@ async def get_artists(
 ):
     query = team_query(current_user)
     
-    artists = await db.artists.find(query).to_list(1000)
+    # Projection excludes the big `saved_prompts` arrays for list view. Pydantic Artist defaults to [].
+    artists = await db.artists.find(query, {"_id": 0, "saved_prompts": 0}).to_list(1000)
     
     # Apply filters
     if search:
@@ -872,7 +873,8 @@ async def get_songs(
         else:
             query["$or"] = [{"versions": {"$exists": False}}, {"versions": []}]
     
-    songs = await db.songs.find(query).sort("updated_at", -1).to_list(1000)
+    # Projection excludes huge `saved_prompts` arrays for list view (they can be 5-20KB each)
+    songs = await db.songs.find(query, {"_id": 0, "saved_prompts": 0}).sort("updated_at", -1).to_list(1000)
     
     # Apply text search filter if provided
     if search:
@@ -982,7 +984,7 @@ async def get_ideas(
     if linked_artist_id:
         query["linked_artist_id"] = linked_artist_id
     
-    ideas = await db.ideas.find(query).sort("created_at", -1).to_list(1000)
+    ideas = await db.ideas.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     
     if search:
         search_lower = search.lower()
@@ -1481,7 +1483,11 @@ async def ai_assistant(data: AssistantMessage, current_user: dict = Depends(get_
         artist = await db.artists.find_one(team_query(current_user, {"id": data.artist_id}))
         if artist:
             # Get ALL songs for this artist to build voice profile
-            artist_songs = await db.songs.find(team_query(current_user, {"artist_id": data.artist_id})).to_list(100)
+            # Lean projection: only fields needed for voice-profile context
+            artist_songs = await db.songs.find(
+                team_query(current_user, {"artist_id": data.artist_id}),
+                {"_id": 0, "saved_prompts": 0, "versions": 0, "suno_generations": 0}
+            ).to_list(100)
             
             song_summaries = []
             for s in artist_songs[:20]:  # Top 20 songs for context
@@ -1770,9 +1776,11 @@ async def log_activity(current_user: dict, action: str, target_type: str, target
     # Dispatch push notifications to teammates (fire and forget) for notable actions
     try:
         team_id = current_user.get("team_id", current_user["id"])
-        # Solo workspace? skip notifications.
-        team_size = await db.users.count_documents({"team_id": team_id})
-        if team_size <= 1:
+        # Solo workspace? skip notifications. Use limit(2) instead of count_documents (much cheaper)
+        team_members_sample = await db.users.find(
+            {"team_id": team_id}, {"id": 1}
+        ).limit(2).to_list(2)
+        if len(team_members_sample) <= 1:
             return
 
         notifiable = {"created", "updated", "commented", "generated", "version_added", "prompted", "reanalyzed"}

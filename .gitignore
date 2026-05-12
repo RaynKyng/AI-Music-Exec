@@ -124,3 +124,26 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+
+# EAS Build artifacts & native eject output
+.eas/
+*.apk
+*.aab
+*.ipa
+ios/
+android/
+expo-env.d.ts
+
+# Mobile metro / Expo
+.expo/
+.expo-shared/
+
+# Backend upload directory (large binary blobs)
+backend/uploads/audio/*
+!backend/uploads/audio/.gitkeep
+
+# Memory / PRD docs (often contain sensitive workspace data)
+memory/PRD.md
+app/memory/PRD.md
+app/memory/test_credentials.md
