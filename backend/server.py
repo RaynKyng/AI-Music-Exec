@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -1873,6 +1874,301 @@ async def log_play(data: PlayLogRequest, current_user: dict = Depends(get_curren
 async def get_collection_songs(coll_id: str, current_user: dict = Depends(get_current_user)):
     songs = await db.songs.find(team_query(current_user, {"collection_id": coll_id})).sort("track_number", 1).to_list(1000)
     return [Song(**s) for s in songs]
+
+# ============== Playlist Brainstorm Workspace ==============
+
+class BrainstormMessage(BaseModel):
+    message: str
+    mode: str = "freeform"  # freeform, song_starters, match_roster, youtube_visual, expand_song
+
+@api_router.get("/collections/{coll_id}/brainstorm")
+async def get_brainstorm(coll_id: str, current_user: dict = Depends(get_current_user)):
+    """Return the persistent brainstorm chat history for a collection."""
+    coll = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
+    if not coll:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return {
+        "chat": coll.get("brainstorm_chat", []),
+        "song_starters": coll.get("brainstorm_song_starters", []),
+    }
+
+@api_router.post("/collections/{coll_id}/brainstorm")
+async def send_brainstorm_message(coll_id: str, data: BrainstormMessage, current_user: dict = Depends(get_current_user)):
+    """Append a message and get an AI response. Whole conversation persists on the collection doc."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    coll = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
+    if not coll:
+        raise HTTPException(status_code=404, detail="Collection not found")
+
+    history = coll.get("brainstorm_chat", [])
+
+    # Fetch roster + existing tracks in this playlist for context
+    roster = await db.artists.find(team_query(current_user), {"_id": 0, "saved_prompts": 0}).to_list(200)
+    roster_summary = "\n".join([
+        f"- {a.get('name','')}: {(a.get('unique_sound') or '')[:90]} | genres: {', '.join(a.get('genres', []))[:80]} | tone: {(a.get('tone') or '')[:60]}"
+        for a in roster
+    ]) or "(no artists in roster yet)"
+
+    existing_songs = await db.songs.find(
+        team_query(current_user, {"collection_id": coll_id}),
+        {"_id": 0, "id": 1, "title": 1, "genre": 1, "mood": 1, "themes": 1, "artist_id": 1}
+    ).to_list(200)
+
+    coll_title = coll.get("title", "Untitled Playlist")
+    coll_desc = coll.get("description", "")
+    coll_type = coll.get("collection_type", "Playlist")
+
+    mode_directives = {
+        "song_starters": """The user wants song starter ideas. Return 15-25 distinct song concepts as a JSON-tagged list at the END of your reply, like:
+
+[SONG_STARTERS]
+- {"title": "...", "concept": "1-sentence song concept", "vibe": "mood/energy", "suggested_artist": "name from roster or 'open'", "suno_style": "starter Suno style (NO real artist names)"}
+- ...
+[/SONG_STARTERS]
+
+In your prose before the JSON, briefly explain the playlist theme you're working from. DO NOT write full lyrics — these are starters/concepts only. Save full lyric writing for a separate request.""",
+        "match_roster": """The user wants you to identify which of their roster artists could contribute songs in their own voice. For each fitting artist, suggest 2-3 song concepts shaped to THEIR existing tone/genre/themes. Return a JSON block:
+
+[ROSTER_MATCHES]
+- {"artist": "name from roster", "fit_score": "high|medium|low", "why": "one sentence", "song_ideas": [{"title":"...","concept":"...","suno_style":"..."}]}
+- ...
+[/ROSTER_MATCHES]""",
+        "youtube_visual": """The user makes YouTube hour-long playlist videos with looping background visuals (e.g., birds flying, smoke from a cigarette, cars driving by, neon flicker). Generate a complete Canva-ready brief for a looping visual that matches this playlist's vibe. Return:
+
+[YOUTUBE_VISUAL]
+{
+  "scene_description": "2-3 sentence vivid scene",
+  "color_palette": ["#hex","#hex","#hex"],
+  "motion_elements": ["element 1 with motion description", "element 2", "..."],
+  "atmosphere": "mood / lighting / weather",
+  "loop_duration_seconds": "ideal loop length",
+  "canva_search_terms": ["term 1", "term 2", "term 3"],
+  "title_treatment": "font style + placement suggestion"
+}
+[/YOUTUBE_VISUAL]""",
+        "expand_song": """The user wants full lyrics + a refined Suno style for ONE song (max two). IMPORTANT: write COMPLETE lyrics — verses, hook, bridge — do NOT summarize or shorten. If the user asks for more than 2, only do the first 2 fully and tell them to ask again for the rest. Format:
+
+[SONG_FULL]
+Title: ...
+Suno style: ...
+Lyrics:
+[Verse 1]
+...
+[Hook]
+...
+[/SONG_FULL]""",
+        "freeform": """Respond naturally as a creative A&R partner. Help refine the playlist concept, identify themes, suggest directions. Keep replies focused and actionable.""",
+    }
+    mode_directive = mode_directives.get(data.mode, mode_directives["freeform"])
+
+    system_message = f"""You are an A&R / creative director helping build a thematic playlist. EVERY message is part of an ongoing brainstorm — reference prior turns, build on them, and keep the playlist's identity consistent.
+
+PLAYLIST WORKSPACE: "{coll_title}" ({coll_type})
+{f'Description: {coll_desc}' if coll_desc else ''}
+Existing tracks in this playlist ({len(existing_songs)}): {', '.join([s.get('title','') for s in existing_songs[:10]]) or '(none yet)'}
+
+USER'S ARTIST ROSTER:
+{roster_summary}
+
+CRITICAL COPYRIGHT RULE: Suno style prompts MUST NEVER include real artist names. Use sonic descriptors only. Real artist names ARE allowed in prose/reasoning, just not in style prompts.
+
+WORKFLOW HINT: If the user wants full lyrics, only generate 1-2 songs per response so quality stays high (AI tends to summarize when stretched across many at once).
+
+MODE for this message: {data.mode}
+{mode_directive}"""
+
+    try:
+        # Build chat with full history
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"brainstorm-{coll_id}",
+            system_message=system_message,
+        ).with_model("openai", "gpt-5.2")
+
+        # Replay history as context
+        replay_block = ""
+        for h in history[-20:]:  # last 20 turns to keep context bounded
+            who = "USER" if h.get("role") == "user" else "ASSISTANT"
+            replay_block += f"\n\n{who}: {h.get('content','')}"
+        full_message = (f"PRIOR CONVERSATION:{replay_block}\n\n" if replay_block else "") + f"NEW USER MESSAGE: {data.message}"
+
+        user_message = UserMessage(text=full_message)
+        response = await chat.send_message(user_message)
+
+        # Parse structured blocks
+        parsed_song_starters: list = []
+        parsed_roster_matches: list = []
+        parsed_youtube_visual: dict = {}
+        parsed_song_full: dict = {}
+
+        import re, json as _json
+        try:
+            m = re.search(r"\[SONG_STARTERS\](.+?)\[/SONG_STARTERS\]", response, re.DOTALL)
+            if m:
+                block = m.group(1).strip()
+                for line in block.split("\n"):
+                    line = line.strip()
+                    if line.startswith("- "):
+                        try:
+                            parsed_song_starters.append(_json.loads(line[2:]))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        try:
+            m = re.search(r"\[ROSTER_MATCHES\](.+?)\[/ROSTER_MATCHES\]", response, re.DOTALL)
+            if m:
+                block = m.group(1).strip()
+                for line in block.split("\n"):
+                    line = line.strip()
+                    if line.startswith("- "):
+                        try:
+                            parsed_roster_matches.append(_json.loads(line[2:]))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        try:
+            m = re.search(r"\[YOUTUBE_VISUAL\](.+?)\[/YOUTUBE_VISUAL\]", response, re.DOTALL)
+            if m:
+                parsed_youtube_visual = _json.loads(m.group(1).strip())
+        except Exception:
+            pass
+        try:
+            m = re.search(r"\[SONG_FULL\](.+?)\[/SONG_FULL\]", response, re.DOTALL)
+            if m:
+                txt = m.group(1).strip()
+                title_match = re.search(r"Title:\s*(.+)", txt)
+                style_match = re.search(r"Suno style:\s*(.+)", txt)
+                lyrics_match = re.search(r"Lyrics:\s*(.+)", txt, re.DOTALL)
+                parsed_song_full = {
+                    "title": title_match.group(1).strip() if title_match else "",
+                    "suno_style": style_match.group(1).strip() if style_match else "",
+                    "lyrics": lyrics_match.group(1).strip() if lyrics_match else "",
+                }
+        except Exception:
+            pass
+
+        now = datetime.utcnow().isoformat()
+        new_history_entries = [
+            {"role": "user", "content": data.message, "mode": data.mode, "timestamp": now, "user_name": current_user.get("name", "")},
+            {
+                "role": "assistant",
+                "content": response,
+                "mode": data.mode,
+                "timestamp": now,
+                "parsed_song_starters": parsed_song_starters,
+                "parsed_roster_matches": parsed_roster_matches,
+                "parsed_youtube_visual": parsed_youtube_visual,
+                "parsed_song_full": parsed_song_full,
+            },
+        ]
+
+        update_ops: dict = {
+            "$push": {"brainstorm_chat": {"$each": new_history_entries}},
+            "$set": {"updated_at": datetime.utcnow()},
+        }
+        # Accumulate parsed song starters separately so the UI can show a clean side panel
+        if parsed_song_starters:
+            update_ops["$push"]["brainstorm_song_starters"] = {"$each": parsed_song_starters}
+
+        await db.collections.update_one({"id": coll_id}, update_ops)
+        await log_activity(current_user, "brainstormed", "collection", coll_id, {"title": coll_title, "mode": data.mode})
+
+        return {
+            "response": response,
+            "parsed_song_starters": parsed_song_starters,
+            "parsed_roster_matches": parsed_roster_matches,
+            "parsed_youtube_visual": parsed_youtube_visual,
+            "parsed_song_full": parsed_song_full,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Brainstorm error: {e}")
+        raise HTTPException(status_code=500, detail=f"Brainstorm failed: {str(e)}")
+
+@api_router.delete("/collections/{coll_id}/brainstorm")
+async def clear_brainstorm(coll_id: str, current_user: dict = Depends(get_current_user)):
+    """Clear the brainstorm chat history (but keep the playlist and its songs)."""
+    coll = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
+    if not coll:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    await db.collections.update_one(
+        {"id": coll_id},
+        {"$set": {"brainstorm_chat": [], "brainstorm_song_starters": [], "updated_at": datetime.utcnow()}}
+    )
+    return {"ok": True}
+
+class SaveStarterRequest(BaseModel):
+    title: str
+    concept: str = ""
+    suno_style: str = ""
+    lyrics: str = ""
+    suggested_artist: str = ""
+
+@api_router.post("/collections/{coll_id}/brainstorm/save-song")
+async def save_brainstorm_song(coll_id: str, data: SaveStarterRequest, current_user: dict = Depends(get_current_user)):
+    """Promote a song starter from the brainstorm into a real draft song attached to this playlist."""
+    coll = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
+    if not coll:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    # Try to match suggested_artist to an existing artist
+    artist_id: Optional[str] = None
+    if data.suggested_artist and data.suggested_artist.lower() != "open":
+        artist = await db.artists.find_one(team_query(current_user, {"name": {"$regex": f"^{re.escape(data.suggested_artist)}$", "$options": "i"}}))
+        if artist:
+            artist_id = artist["id"]
+
+    song_dict = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "team_id": current_user.get("team_id", current_user["id"]),
+        "title": data.title or "Untitled Idea",
+        "artist_id": artist_id,
+        "featured_artist_ids": [],
+        "collection_id": coll_id,
+        "lyrics": data.lyrics,
+        "authorship": "ai_generated",
+        "style_prompt": data.suno_style,
+        "style_secondary": "",
+        "style_alternate": "",
+        "additional_styles": [],
+        "exclusions": "",
+        "genre": "",
+        "mood": "",
+        "tempo": "",
+        "themes": [],
+        "status": "draft",
+        "notes": data.concept,
+        "todo": [],
+        "versions": [],
+        "suno_generations": [],
+        "saved_prompts": [{
+            "id": str(uuid.uuid4()),
+            "prompt_type": "brainstorm_origin",
+            "label": f"From Brainstorm \u00b7 {datetime.utcnow().strftime('%b %d, %Y')}",
+            "content": f"Concept: {data.concept}\nSuno Style: {data.suno_style}\nSuggested artist: {data.suggested_artist}",
+            "saved_by_id": current_user["id"],
+            "saved_by_name": current_user.get("name", ""),
+            "created_at": datetime.utcnow().isoformat(),
+        }],
+        "track_number": 0,
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+    }
+    await db.songs.insert_one(song_dict)
+    if artist_id:
+        await db.artists.update_one({"id": artist_id}, {"$inc": {"song_count": 1}})
+    await log_activity(current_user, "created", "song", song_dict["id"], {"title": song_dict["title"]})
+
+    # Remove this starter from the persisted starters list (by title match)
+    await db.collections.update_one(
+        {"id": coll_id},
+        {"$pull": {"brainstorm_song_starters": {"title": data.title}}}
+    )
+    return {"ok": True, "song_id": song_dict["id"], "artist_id": artist_id}
 
 # ============== Revenue Routes ==============
 

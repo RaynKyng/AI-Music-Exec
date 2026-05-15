@@ -295,6 +295,20 @@ test_plan:
   test_all: false
   test_priority: "high_first"
 
+backend_brainstorm_2026_05:
+  - task: "Playlist Brainstorm Workspace endpoints (GET/POST/DELETE/save-song) + log_activity 'brainstormed'"
+    implemented: true
+    working: true
+    file: "/app/backend/server.py"
+    status_history:
+      - working: true
+        agent: "testing"
+        comment: "PASS 37/37 in /app/backend_brainstorm_test.py against public preview URL (1 initial FAIL on re-analyze was a test-side missing body — re-validated separately as 200 OK with ReAnalyzeRequest body). Verified end-to-end against existing 'Second Nature' collection (a6707631-...): (C) Initial GET /api/collections/{id}/brainstorm returns 200 with chat=[] and song_starters=[] after a fresh DELETE. (D) POST mode=freeform returns 200 with non-empty `response` string (2722 chars) and parsed_song_starters/parsed_roster_matches empty arrays. (E) POST mode=song_starters returned 5 starters, each a dict with keys title/concept/vibe/suggested_artist/suno_style (suno_style is a sonic descriptor — no real artist names). (F) After 2 posts GET shows chat with 4 entries alternating user/assistant/user/assistant and brainstorm_song_starters length 5. (G) POST /brainstorm/save-song with first starter returned {ok:true, song_id, artist_id} — new song was found via GET /api/songs/{id} with collection_id matching, title preserved ('Dashboard Receipts'), and saved_prompts contained a brainstorm_origin entry. After save, that starter was pulled from brainstorm_song_starters (5→4). The save also matched suggested_artist (case-insensitive) to an existing roster artist and assigned artist_id (artist song_count incremented). (H) DELETE /api/collections/{id}/brainstorm returned {ok:true} and subsequent GET showed chat=[] and song_starters=[]. (I) All 4 negative cases (GET/POST/DELETE/save-song on a random UUID) returned 404 as expected. REGRESSION: POST /api/auth/login, GET /api/artists, /api/songs, /api/ideas, /api/collections, GET /api/collections/{id} (full collection returned with id matching), GET /api/activity/recent (200, contains 2 'brainstormed' actions emitted for this collection by the test — log_activity hook fires correctly with target_type=collection and details.title/mode), POST /api/songs/{id}/re-analyze with proper {custom_prompt, focus} body returns 200 + {analysis, saved_prompt}. NOTE: mode='expand_song' (full lyrics generation, ~30-60s) was NOT exercised per review-request instructions — flagged as untested but not blocking. EMERGENT_LLM_KEY present and AI calls succeed via gpt-5.2."
+
+agent_communication:
+  - agent: "testing"
+    message: "Brainstorm Workspace backend test complete — 37/37 PASS in /app/backend_brainstorm_test.py against the public preview URL (the lone FAIL in the run was a test-side missing body on /re-analyze, re-validated 200 OK once the {custom_prompt, focus} body was supplied). All 4 new endpoints work end-to-end: GET returns chat/song_starters, POST in freeform/song_starters modes produces the documented parsed_* fields (song_starters mode returned 5 valid starter dicts with title/concept/suno_style/suggested_artist), state persists on the collection doc and is visible on subsequent GETs, save-song promotes a starter to a draft Song with collection_id set + brainstorm_origin saved_prompt + auto-matched artist_id (case-insensitive name match → artist song_count incremented) + starter pulled from brainstorm_song_starters, DELETE clears both arrays, all 4 negative-case 404s work. Regression: auth/login, list endpoints (artists/songs/ideas/collections), collection detail, /activity/recent (shows 'brainstormed' action entries fired by log_activity), and /songs/{id}/re-analyze all still pass. mode='expand_song' was intentionally skipped per the review request. No regressions detected from the new endpoints or the log_activity hook."
+
 backend_projection_regression_2026_05:
   - task: "DB query projections (artists/songs/ideas/ai-assistant/log_activity team-size)"
     implemented: true

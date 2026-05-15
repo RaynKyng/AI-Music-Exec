@@ -15,6 +15,7 @@ import { Card } from '../../src/components/Card';
 import { StatusBadge } from '../../src/components/StatusBadge';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
+import { safeGoBack } from '../../src/utils/nav';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album'];
@@ -107,7 +108,7 @@ export default function CollectionDetailScreen() {
       const method = isNew ? 'POST' : 'PUT';
       const res = await authFetch(url, { method, body: JSON.stringify(form) });
       if (!res.ok) throw new Error('Failed');
-      router.back();
+      safeGoBack('/collections');
     } catch { Alert.alert('Error', 'Failed to save'); }
     finally { setSaving(false); }
   };
@@ -119,11 +120,22 @@ export default function CollectionDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => safeGoBack('/collections')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>{isNew ? 'New Release' : 'Edit Release'}</Text>
-        <View style={styles.placeholder} />
+        {isNew ? (
+          <View style={styles.placeholder} />
+        ) : (
+          <Pressable
+            style={styles.brainstormBtn}
+            onPress={() => router.push(`/collection/${id}/brainstorm`)}
+            hitSlop={8}
+          >
+            <Ionicons name="bulb" size={16} color={colors.primary} />
+            <Text style={styles.brainstormBtnText}>Brainstorm</Text>
+          </Pressable>
+        )}
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.flex}>
@@ -283,7 +295,7 @@ export default function CollectionDetailScreen() {
                 { text: 'Cancel', style: 'cancel' },
                 { text: 'Delete', style: 'destructive', onPress: async () => {
                   await authFetch(`${API_URL}/api/collections/${id}`, { method: 'DELETE' });
-                  router.back();
+                  safeGoBack('/collections');
                 }},
               ]);
             }}>
@@ -306,6 +318,8 @@ const styles = StyleSheet.create({
   backBtn: { padding: spacing.sm, minWidth: 44, minHeight: 44, justifyContent: 'center' },
   headerTitle: { fontSize: 20, fontWeight: '600', color: colors.text },
   placeholder: { width: 44 },
+  brainstormBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primary + '20' },
+  brainstormBtnText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   scroll: { flex: 1 },
   scrollContent: { padding: spacing.lg },
   coverSection: { alignItems: 'center', marginBottom: spacing.lg },
