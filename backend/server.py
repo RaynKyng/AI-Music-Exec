@@ -1920,34 +1920,53 @@ async def send_brainstorm_message(coll_id: str, data: BrainstormMessage, current
     coll_type = coll.get("collection_type", "Playlist")
 
     mode_directives = {
-        "song_starters": """The user wants song starter ideas. Return 15-25 distinct song concepts as a JSON-tagged list at the END of your reply, like:
+        "song_starters": """The user is building a thematic playlist — using a movie / TV show / vibe / era as INSPIRATION ONLY. They want 15-25 standalone "single" song concepts that match different MOMENTS, EMOTIONS, or PERSPECTIVES from the source material — NOT a scene-by-scene retelling.
+
+CRITICAL RULES:
+1. NEVER include character names, plot recaps, location names, or any copyrighted phrases from the source.
+2. Songs must hold up as STANDALONE SINGLES — someone hearing one on the radio with no context should still vibe with it.
+3. Cover DIFFERENT moments / different emotions / different perspectives (the protagonist's struggle, a side character's love, a bystander's observation, the city's heartbeat, etc.).
+4. Make every song feel DISTINCT from the others — no two should feel like the same song split apart. Vary tempo, key, mood, perspective, narrator voice.
+5. Songs are the TEAM'S PICK for moments in the playlist's vibe — like a soundtrack supervisor curating, not a screenwriter narrating.
+6. NO real artist names in suno_style — only sonic descriptors (e.g., "warm Rhodes piano, 90 BPM neo-soul groove, dusty drums").
+
+Return your prose intro (3-5 sentences max explaining the angle you took) THEN this JSON block:
 
 [SONG_STARTERS]
-- {"title": "...", "concept": "1-sentence song concept", "vibe": "mood/energy", "suggested_artist": "name from roster or 'open'", "suno_style": "starter Suno style (NO real artist names)"}
+- {"title": "...", "concept": "What moment/feeling/perspective this captures (1-2 sentences, NO source references)", "vibe": "mood + energy descriptor", "suggested_artist": "name from roster or 'open'", "suno_style": "Suno-ready style prompt with sonic descriptors only"}
 - ...
 [/SONG_STARTERS]
 
-In your prose before the JSON, briefly explain the playlist theme you're working from. DO NOT write full lyrics — these are starters/concepts only. Save full lyric writing for a separate request.""",
-        "match_roster": """The user wants you to identify which of their roster artists could contribute songs in their own voice. For each fitting artist, suggest 2-3 song concepts shaped to THEIR existing tone/genre/themes. Return a JSON block:
+DO NOT write full lyrics here. These are starter concepts. Save lyric writing for a separate `expand_song` request.""",
+        "match_roster": """The user wants you to identify which of their roster artists could contribute songs in their own voice. For each fitting artist, suggest 2-3 song concepts shaped to THEIR existing tone/genre/themes/perspective. Songs should still feel like standalone singles, not retellings.
+
+Return:
 
 [ROSTER_MATCHES]
-- {"artist": "name from roster", "fit_score": "high|medium|low", "why": "one sentence", "song_ideas": [{"title":"...","concept":"...","suno_style":"..."}]}
+- {"artist": "name from roster", "fit_score": "high|medium|low", "why": "one sentence on why their voice fits this playlist's energy", "song_ideas": [{"title":"...","concept":"moment/perspective captured","suno_style":"sonic descriptors only, no real artist names"}]}
 - ...
 [/ROSTER_MATCHES]""",
-        "youtube_visual": """The user makes YouTube hour-long playlist videos with looping background visuals (e.g., birds flying, smoke from a cigarette, cars driving by, neon flicker). Generate a complete Canva-ready brief for a looping visual that matches this playlist's vibe. Return:
+        "youtube_visual": """The user makes hour-long YouTube playlist videos with looping background visuals (e.g., birds flying, smoke curling from a cigarette, cars driving by, neon flicker, raindrops). Generate a Canva-ready brief for a looping visual that matches THIS playlist's vibe — not a movie still or copyrighted imagery, but an evocative scene that captures the energy. Return:
 
 [YOUTUBE_VISUAL]
 {
-  "scene_description": "2-3 sentence vivid scene",
+  "scene_description": "2-3 sentence vivid scene (original, not from source material)",
   "color_palette": ["#hex","#hex","#hex"],
-  "motion_elements": ["element 1 with motion description", "element 2", "..."],
+  "motion_elements": ["element with motion description", "...", "..."],
   "atmosphere": "mood / lighting / weather",
   "loop_duration_seconds": "ideal loop length",
   "canva_search_terms": ["term 1", "term 2", "term 3"],
   "title_treatment": "font style + placement suggestion"
 }
 [/YOUTUBE_VISUAL]""",
-        "expand_song": """The user wants full lyrics + a refined Suno style for ONE song (max two). IMPORTANT: write COMPLETE lyrics — verses, hook, bridge — do NOT summarize or shorten. If the user asks for more than 2, only do the first 2 fully and tell them to ask again for the rest. Format:
+        "expand_song": """The user wants full lyrics + a refined Suno style for ONE song (max two). IMPORTANT RULES:
+1. Write COMPLETE lyrics — verses, hook, bridge, outro. Do NOT summarize or shorten.
+2. If the user asks for more than 2 songs, only do the first 2 fully and tell them to ask again for the rest.
+3. NO copyrighted phrases, no real character names, no direct quotes from the source material that inspired the playlist.
+4. The song must hold up as a standalone single.
+5. NO real artist names in the Suno style — sonic descriptors only.
+
+Format:
 
 [SONG_FULL]
 Title: ...
@@ -1957,8 +1976,14 @@ Lyrics:
 ...
 [Hook]
 ...
+[Verse 2]
+...
+[Bridge]
+...
+[Outro]
+...
 [/SONG_FULL]""",
-        "freeform": """Respond naturally as a creative A&R partner. Help refine the playlist concept, identify themes, suggest directions. Keep replies focused and actionable.""",
+        "freeform": """Respond naturally as a creative A&R partner. Help refine the playlist concept, identify themes/moments, suggest directions, mix-and-match across the catalog. Keep replies focused and actionable. Songs in this playlist should always be standalone singles inspired by moments from the source, not scene-by-scene retellings. Never include copyrighted phrases or real character names in song content.""",
     }
     mode_directive = mode_directives.get(data.mode, mode_directives["freeform"])
 
