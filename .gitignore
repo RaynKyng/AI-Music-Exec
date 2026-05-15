@@ -111,3 +111,12 @@ backend/uploads/audio/*
 memory/PRD.md
 app/memory/PRD.md
 app/memory/test_credentials.md
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
