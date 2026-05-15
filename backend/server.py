@@ -256,8 +256,8 @@ class AIAnalysisResponse(BaseModel):
 # Collection Models (EP/LP)
 class CollectionCreate(BaseModel):
     title: str
-    artist_id: str
-    collection_type: str = "EP"  # EP, LP, Single, Album
+    artist_id: Optional[str] = None  # Optional — playlists are artist-agnostic; required for EP/LP/Album/Single
+    collection_type: str = "EP"  # EP, LP, Single, Album, Playlist
     cover_image: str = ""  # base64 or URL
     cover_image_url: str = ""
     description: str = ""

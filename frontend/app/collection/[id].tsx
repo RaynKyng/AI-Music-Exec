@@ -18,7 +18,7 @@ import { colors, spacing, statusColors } from '../../src/utils/theme';
 import { safeGoBack } from '../../src/utils/nav';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
-const COLL_TYPES = ['EP', 'LP', 'Single', 'Album'];
+const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
 const STATUS_OPTS = ['in_progress', 'completed', 'released'];
 
 export default function CollectionDetailScreen() {
@@ -241,28 +241,42 @@ export default function CollectionDetailScreen() {
           </Card>
 
           <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Artist</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {artists.map(a => (
-                <Pressable key={a.id} style={[styles.chip, form.artist_id === a.id && styles.chipActive]}
-                  onPress={() => setForm({ ...form, artist_id: a.id })}>
-                  <Text style={[styles.chipText, form.artist_id === a.id && styles.chipTextActive]}>{a.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </Card>
-
-          <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Type</Text>
             <View style={styles.chipRow}>
               {COLL_TYPES.map(t => (
                 <Pressable key={t} style={[styles.chip, form.collection_type === t && styles.chipActive]}
-                  onPress={() => setForm({ ...form, collection_type: t })}>
+                  onPress={() => {
+                    // When switching to Playlist, clear artist_id (playlists are artist-agnostic)
+                    setForm({
+                      ...form,
+                      collection_type: t,
+                      ...(t === 'Playlist' ? { artist_id: '' } : {}),
+                    });
+                  }}>
                   <Text style={[styles.chipText, form.collection_type === t && styles.chipTextActive]}>{t}</Text>
                 </Pressable>
               ))}
             </View>
+            {form.collection_type === 'Playlist' && (
+              <Text style={styles.helpText}>
+                Playlists are artist-agnostic — they're curated vibe mixes that can include songs from any artist in your catalog.
+              </Text>
+            )}
           </Card>
+
+          {form.collection_type !== 'Playlist' && (
+            <Card style={styles.section}>
+              <Text style={styles.sectionTitle}>Artist</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {artists.map(a => (
+                  <Pressable key={a.id} style={[styles.chip, form.artist_id === a.id && styles.chipActive]}
+                    onPress={() => setForm({ ...form, artist_id: a.id })}>
+                    <Text style={[styles.chipText, form.artist_id === a.id && styles.chipTextActive]}>{a.name}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </Card>
+          )}
 
           <Card style={styles.section}>
             <Text style={styles.sectionTitle}>Status</Text>
@@ -553,4 +567,5 @@ const styles = StyleSheet.create({
   confirmBtn: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   confirmBtnDisabled: { opacity: 0.4 },
   confirmBtnText: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  helpText: { fontSize: 12, color: colors.textMuted, marginTop: 8, fontStyle: 'italic', lineHeight: 17 },
 });

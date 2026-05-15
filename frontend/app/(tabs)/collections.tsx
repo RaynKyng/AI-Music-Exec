@@ -60,10 +60,16 @@ export default function CollectionsScreen() {
   const onRefresh = async () => { setRefreshing(true); await loadCollections(); setRefreshing(false); };
 
   const handleCreate = async () => {
-    if (!form.title.trim() || !form.artist_id) { Alert.alert('Error', 'Title and artist required'); return; }
+    if (!form.title.trim()) { Alert.alert('Error', 'Title required'); return; }
+    // Playlists are artist-agnostic. Albums/EPs/Singles need a primary artist.
+    if (form.collection_type !== 'Playlist' && !form.artist_id) {
+      Alert.alert('Error', 'Select a primary artist (or change Type to Playlist for artist-agnostic curation).');
+      return;
+    }
     setSaving(true);
     try {
-      const res = await authFetch(`${API_URL}/api/collections`, { method: 'POST', body: JSON.stringify(form) });
+      const payload = { ...form, artist_id: form.collection_type === 'Playlist' ? null : form.artist_id };
+      const res = await authFetch(`${API_URL}/api/collections`, { method: 'POST', body: JSON.stringify(payload) });
       if (!res.ok) throw new Error('Failed');
       await loadCollections();
       setModalVisible(false);
@@ -165,7 +171,9 @@ export default function CollectionsScreen() {
                 <View style={styles.listRowLeft}>
                   <Text style={styles.listTitle} numberOfLines={1}>{coll.title}</Text>
                   <Text style={styles.listSubtitle} numberOfLines={1}>
-                    {getArtistName(coll.artist_id)} • {coll.collection_type} • {coll.track_count || 0} {(coll.track_count || 0) === 1 ? 'track' : 'tracks'}
+                    {coll.collection_type === 'Playlist'
+                      ? `Playlist • ${coll.track_count || 0} ${(coll.track_count || 0) === 1 ? 'track' : 'tracks'}`
+                      : `${getArtistName(coll.artist_id)} • ${coll.collection_type} • ${coll.track_count || 0} ${(coll.track_count || 0) === 1 ? 'track' : 'tracks'}`}
                   </Text>
                 </View>
                 <View style={[styles.statusDot, { backgroundColor: statusColor(coll.status) }]} />
@@ -197,7 +205,9 @@ export default function CollectionsScreen() {
                 )}
                 <View style={styles.collInfo}>
                   <Text style={styles.collTitle} numberOfLines={1}>{coll.title}</Text>
-                  <Text style={styles.collArtist} numberOfLines={1}>{getArtistName(coll.artist_id)}</Text>
+                  <Text style={styles.collArtist} numberOfLines={1}>
+                    {coll.collection_type === 'Playlist' ? 'Various artists' : getArtistName(coll.artist_id)}
+                  </Text>
                   <View style={styles.collMeta}>
                     <View style={[styles.typeBadge, { backgroundColor: colors.surfaceLight }]}>
                       <Text style={styles.typeText}>{coll.collection_type}</Text>
@@ -227,29 +237,38 @@ export default function CollectionsScreen() {
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Release</Text>
+              <Text style={styles.modalTitle}>{form.collection_type === 'Playlist' ? 'New Playlist' : 'New Release'}</Text>
               <Pressable onPress={() => setModalVisible(false)}><Ionicons name="close" size={24} color={colors.text} /></Pressable>
             </View>
-            <Input label="Title" placeholder="Album/EP name" value={form.title} onChangeText={t => setForm({...form, title: t})} />
-            <Text style={styles.label}>Artist</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-              {artists.map(a => (
-                <Pressable key={a.id} style={[styles.chip, form.artist_id === a.id && styles.chipActive]} onPress={() => setForm({...form, artist_id: a.id})}>
-                  <Text style={[styles.chipText, form.artist_id === a.id && styles.chipTextActive]}>{a.name}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <Input label="Title" placeholder={form.collection_type === 'Playlist' ? 'Playlist name (e.g., "Brown Sugar Vibes")' : 'Album/EP name'} value={form.title} onChangeText={t => setForm({...form, title: t})} />
             <Text style={styles.label}>Type</Text>
             <View style={styles.typeRow}>
               {COLL_TYPES.map(t => (
-                <Pressable key={t} style={[styles.chip, form.collection_type === t && styles.chipActive]} onPress={() => setForm({...form, collection_type: t})}>
+                <Pressable key={t} style={[styles.chip, form.collection_type === t && styles.chipActive]}
+                  onPress={() => setForm({...form, collection_type: t, ...(t === 'Playlist' ? { artist_id: '' } : {})})}>
                   <Text style={[styles.chipText, form.collection_type === t && styles.chipTextActive]}>{t}</Text>
                 </Pressable>
               ))}
             </View>
+            {form.collection_type === 'Playlist' ? (
+              <Text style={styles.playlistHint}>Playlists are artist-agnostic — curate songs from any artist after creation.</Text>
+            ) : (
+              <>
+                <Text style={styles.label}>Artist</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+                  {artists.map(a => (
+                    <Pressable key={a.id} style={[styles.chip, form.artist_id === a.id && styles.chipActive]} onPress={() => setForm({...form, artist_id: a.id})}>
+                      <Text style={[styles.chipText, form.artist_id === a.id && styles.chipTextActive]}>{a.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+            <View style={styles.typeRowHidden}>
+            </View>
             <Input label="Cover Art URL" placeholder="https://..." value={form.cover_image_url} onChangeText={t => setForm({...form, cover_image_url: t})} autoCapitalize="none" />
             <Input label="Description" placeholder="About this release" value={form.description} onChangeText={t => setForm({...form, description: t})} multiline />
-            <Button title="Create Release" onPress={handleCreate} loading={saving} style={styles.saveBtn} />
+            <Button title={form.collection_type === 'Playlist' ? 'Create Playlist' : 'Create Release'} onPress={handleCreate} loading={saving} style={styles.saveBtn} />
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -308,6 +327,8 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm },
   chipScroll: { marginBottom: spacing.md },
   typeRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
+  typeRowHidden: { height: 0, overflow: 'hidden' },
+  playlistHint: { fontSize: 12, color: colors.textMuted, fontStyle: 'italic', marginBottom: spacing.md, lineHeight: 17 },
   chip: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, borderRadius: 20, backgroundColor: colors.surfaceLight, marginRight: spacing.sm },
   chipActive: { backgroundColor: colors.primary },
   chipText: { color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
