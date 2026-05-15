@@ -82,9 +82,8 @@ memory/test_credentials.md
 android-sdk/
 
 # Environment and credential files (deduplicated)
-.env
-.env.*
-*.env
+# NOTE: .env files MUST be tracked for Emergent Kubernetes deployment — they
+# get auto-injected during the deploy process. Only ignore non-tracked credentials.
 credentials.json
 *.pem
 *.key
