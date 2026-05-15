@@ -172,7 +172,8 @@ class SongCreate(BaseModel):
     title: str
     artist_id: Optional[str] = None  # primary artist
     featured_artist_ids: List[str] = []  # featured/collaborating artists
-    collection_id: Optional[str] = None  # EP/LP it belongs to
+    collection_id: Optional[str] = None  # primary/home EP/LP it belongs to (legacy single)
+    playlist_ids: List[str] = []  # additional playlists this song is curated into (many-to-many)
     lyrics: str = ""
     authorship: str = "original"  # original, ai_generated, collab
     style_prompt: str = ""  # primary style (Suno-formatted)
@@ -1671,8 +1672,10 @@ async def update_collection(coll_id: str, data: CollectionCreate, current_user: 
         raise HTTPException(status_code=404, detail="Collection not found")
     update_dict = data.dict()
     update_dict["updated_at"] = datetime.utcnow()
-    # Recount tracks
-    track_count = await db.songs.count_documents(team_query(current_user, {"collection_id": coll_id}))
+    # Recount tracks: includes songs whose primary collection_id matches OR are curated via playlist_ids
+    track_count = await db.songs.count_documents(team_query(current_user, {
+        "$or": [{"collection_id": coll_id}, {"playlist_ids": coll_id}]
+    }))
     update_dict["track_count"] = track_count
     await db.collections.update_one({"id": coll_id}, {"$set": update_dict})
     updated = await db.collections.find_one({"id": coll_id})
@@ -1872,8 +1875,48 @@ async def log_play(data: PlayLogRequest, current_user: dict = Depends(get_curren
 
 @api_router.get("/collections/{coll_id}/songs", response_model=List[Song])
 async def get_collection_songs(coll_id: str, current_user: dict = Depends(get_current_user)):
-    songs = await db.songs.find(team_query(current_user, {"collection_id": coll_id})).sort("track_number", 1).to_list(1000)
+    # Songs are in the playlist if EITHER their primary collection_id matches
+    # OR they've been curated into this playlist via playlist_ids
+    songs = await db.songs.find(team_query(current_user, {
+        "$or": [
+            {"collection_id": coll_id},
+            {"playlist_ids": coll_id},
+        ]
+    })).sort("track_number", 1).to_list(1000)
     return [Song(**s) for s in songs]
+
+class AddSongsRequest(BaseModel):
+    song_ids: List[str]
+
+@api_router.post("/collections/{coll_id}/add-songs")
+async def add_songs_to_collection(coll_id: str, data: AddSongsRequest, current_user: dict = Depends(get_current_user)):
+    """Curate existing catalog songs into this playlist (many-to-many). Doesn't move the song from its home collection."""
+    coll = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
+    if not coll:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    if not data.song_ids:
+        return {"ok": True, "added": 0}
+    res = await db.songs.update_many(
+        team_query(current_user, {"id": {"$in": data.song_ids}}),
+        {"$addToSet": {"playlist_ids": coll_id}, "$set": {"updated_at": datetime.utcnow()}}
+    )
+    await log_activity(current_user, "updated", "collection", coll_id, {"title": coll.get("title", ""), "songs_added": len(data.song_ids)})
+    return {"ok": True, "added": res.modified_count}
+
+@api_router.delete("/collections/{coll_id}/songs/{song_id}")
+async def remove_song_from_collection(coll_id: str, song_id: str, current_user: dict = Depends(get_current_user)):
+    """Remove a song from this playlist (does NOT delete the song from the catalog).
+    - If song's primary collection_id == this collection, clear it (becomes a "homeless" song)
+    - Always pull this coll_id from the song's playlist_ids array
+    """
+    song = await db.songs.find_one(team_query(current_user, {"id": song_id}))
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+    update_ops: dict = {"$pull": {"playlist_ids": coll_id}, "$set": {"updated_at": datetime.utcnow()}}
+    if song.get("collection_id") == coll_id:
+        update_ops["$set"]["collection_id"] = None
+    await db.songs.update_one({"id": song_id}, update_ops)
+    return {"ok": True}
 
 # ============== Playlist Brainstorm Workspace ==============
 

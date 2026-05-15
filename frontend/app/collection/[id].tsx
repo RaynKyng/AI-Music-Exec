@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Pressable, Alert,
-  KeyboardAvoidingView, Platform, Image,
+  View, Text, StyleSheet, ScrollView, Pressable, Alert, TextInput,
+  KeyboardAvoidingView, Platform, Image, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
@@ -30,6 +30,12 @@ export default function CollectionDetailScreen() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [tracks, setTracks] = useState<any[]>([]);
+  const [showSongPicker, setShowSongPicker] = useState(false);
+  const [pickerSongs, setPickerSongs] = useState<any[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [pickerSelected, setPickerSelected] = useState<Set<string>>(new Set());
+  const [pickerArtistFilter, setPickerArtistFilter] = useState<string>('');
   const [form, setForm] = useState({
     title: '', artist_id: '', collection_type: 'EP', cover_image_url: '',
     description: '', release_date: '', status: 'in_progress', notes: '',
@@ -99,6 +105,77 @@ export default function CollectionDetailScreen() {
     } catch { /* reload to get correct state */ }
     await loadCollection();
   };
+
+  // === Add songs from catalog (picker) ===
+  const openSongPicker = async () => {
+    setShowSongPicker(true);
+    setPickerSelected(new Set());
+    setPickerSearch('');
+    setPickerArtistFilter('');
+    setPickerLoading(true);
+    try {
+      const res = await authFetch(`${API_URL}/api/songs`);
+      if (res.ok) {
+        const all = await res.json();
+        // Filter: exclude songs already in this playlist
+        const existingIds = new Set(tracks.map((t: any) => t.id));
+        setPickerSongs(all.filter((s: any) => !existingIds.has(s.id)));
+      }
+    } finally {
+      setPickerLoading(false);
+    }
+  };
+
+  const togglePickerSong = (songId: string) => {
+    setPickerSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(songId)) next.delete(songId);
+      else next.add(songId);
+      return next;
+    });
+  };
+
+  const confirmAddSongs = async () => {
+    if (pickerSelected.size === 0) {
+      setShowSongPicker(false);
+      return;
+    }
+    try {
+      const res = await authFetch(`${API_URL}/api/collections/${id}/add-songs`, {
+        method: 'POST',
+        body: JSON.stringify({ song_ids: Array.from(pickerSelected) }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setShowSongPicker(false);
+      await loadCollection();
+    } catch {
+      Alert.alert('Error', 'Could not add songs');
+    }
+  };
+
+  const removeSongFromPlaylist = async (songId: string, songTitle: string) => {
+    Alert.alert(
+      'Remove from this playlist?',
+      `"${songTitle}" stays in your catalog — only removed from this playlist.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: async () => {
+          try {
+            await authFetch(`${API_URL}/api/collections/${id}/songs/${songId}`, { method: 'DELETE' });
+            await loadCollection();
+          } catch {
+            Alert.alert('Error', 'Could not remove');
+          }
+        }},
+      ]
+    );
+  };
+
+  const filteredPickerSongs = pickerSongs.filter((s: any) => {
+    if (pickerSearch && !s.title?.toLowerCase().includes(pickerSearch.toLowerCase())) return false;
+    if (pickerArtistFilter && s.artist_id !== pickerArtistFilter) return false;
+    return true;
+  });
 
   const handleSave = async () => {
     if (!form.title.trim()) { Alert.alert('Error', 'Title required'); return; }
@@ -213,6 +290,12 @@ export default function CollectionDetailScreen() {
             <Card style={styles.section}>
               <View style={styles.tracklistHeader}>
                 <Text style={[styles.sectionTitle, { marginBottom: 0, flex: 1 }]}>Tracklist ({tracks.length})</Text>
+                <Pressable
+                  style={styles.addFromCatalogBtn}
+                  onPress={openSongPicker}>
+                  <Ionicons name="add-circle" size={14} color={colors.primary} />
+                  <Text style={styles.addFromCatalogText}>Add</Text>
+                </Pressable>
                 {tracks.length > 0 && (
                   <Pressable
                     style={styles.playAllBtn}
@@ -280,7 +363,18 @@ export default function CollectionDetailScreen() {
                         {song.status}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                    <View dataSet={{ stopParent: 'true' }}>
+                      <Pressable
+                        style={styles.removeFromPlaylistBtn}
+                        hitSlop={8}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          removeSongFromPlaylist(song.id, song.title);
+                        }}
+                      >
+                        <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+                      </Pressable>
+                    </View>
                   </Pressable>
                 ))
               )}
@@ -307,6 +401,88 @@ export default function CollectionDetailScreen() {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Song Picker Modal */}
+      <Modal visible={showSongPicker} animationType="slide" transparent={true} onRequestClose={() => setShowSongPicker(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add songs from catalog</Text>
+              <Pressable onPress={() => setShowSongPicker(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.text} />
+              </Pressable>
+            </View>
+            <View style={styles.searchRow}>
+              <Ionicons name="search" size={16} color={colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search songs by title…"
+                placeholderTextColor={colors.textMuted}
+                value={pickerSearch}
+                onChangeText={setPickerSearch}
+              />
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistFilterScroll} contentContainerStyle={{ gap: 6, paddingHorizontal: spacing.md }}>
+              <Pressable
+                style={[styles.filterChip, !pickerArtistFilter && styles.filterChipActive]}
+                onPress={() => setPickerArtistFilter('')}
+              >
+                <Text style={[styles.filterChipText, !pickerArtistFilter && styles.filterChipTextActive]}>All</Text>
+              </Pressable>
+              {artists.map((a: any) => (
+                <Pressable
+                  key={a.id}
+                  style={[styles.filterChip, pickerArtistFilter === a.id && styles.filterChipActive]}
+                  onPress={() => setPickerArtistFilter(pickerArtistFilter === a.id ? '' : a.id)}
+                >
+                  <Text style={[styles.filterChipText, pickerArtistFilter === a.id && styles.filterChipTextActive]} numberOfLines={1}>{a.name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <ScrollView style={styles.pickerList}>
+              {pickerLoading ? (
+                <Text style={styles.pickerEmpty}>Loading…</Text>
+              ) : filteredPickerSongs.length === 0 ? (
+                <Text style={styles.pickerEmpty}>No songs match. Try a different filter.</Text>
+              ) : (
+                filteredPickerSongs.map((s: any) => {
+                  const selected = pickerSelected.has(s.id);
+                  const artistName = artists.find((a: any) => a.id === s.artist_id)?.name || '';
+                  return (
+                    <Pressable
+                      key={s.id}
+                      style={[styles.pickerRow, selected && styles.pickerRowSelected]}
+                      onPress={() => togglePickerSong(s.id)}
+                    >
+                      <Ionicons
+                        name={selected ? 'checkbox' : 'square-outline'}
+                        size={20}
+                        color={selected ? colors.primary : colors.textMuted}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pickerTitle} numberOfLines={1}>{s.title}</Text>
+                        <Text style={styles.pickerSubtitle} numberOfLines={1}>
+                          {artistName}{s.status ? ` • ${s.status}` : ''}{s.genre ? ` • ${s.genre}` : ''}
+                        </Text>
+                      </View>
+                    </Pressable>
+                  );
+                })
+              )}
+            </ScrollView>
+            <View style={styles.modalFooter}>
+              <Text style={styles.selectedCount}>{pickerSelected.size} selected</Text>
+              <Pressable
+                style={[styles.confirmBtn, pickerSelected.size === 0 && styles.confirmBtnDisabled]}
+                onPress={confirmAddSongs}
+                disabled={pickerSelected.size === 0}
+              >
+                <Text style={styles.confirmBtnText}>Add to playlist</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -350,4 +526,31 @@ const styles = StyleSheet.create({
   saveBtn: { marginTop: spacing.md },
   deleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.md, marginTop: spacing.md, gap: spacing.sm },
   deleteBtnText: { fontSize: 15, color: colors.error, fontWeight: '500' },
+
+  // Song picker (add from catalog)
+  addFromCatalogBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, backgroundColor: colors.primary + '20', marginRight: 8 },
+  addFromCatalogText: { fontSize: 12, color: colors.primary, fontWeight: '700' },
+  removeFromPlaylistBtn: { padding: 6, marginLeft: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  modalSheet: { backgroundColor: colors.background, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '85%', minHeight: '60%', borderTopWidth: 1, borderTopColor: colors.border },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: spacing.md, marginVertical: 8, paddingHorizontal: 12, backgroundColor: colors.surface, borderRadius: 10, borderWidth: 1, borderColor: colors.border },
+  searchInput: { flex: 1, color: colors.text, fontSize: 14, paddingVertical: 10 },
+  artistFilterScroll: { maxHeight: 40, marginBottom: 8 },
+  filterChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  filterChipText: { fontSize: 12, color: colors.textSecondary, maxWidth: 120 },
+  filterChipTextActive: { color: colors.text, fontWeight: '700' },
+  pickerList: { flex: 1, paddingHorizontal: spacing.md },
+  pickerEmpty: { textAlign: 'center', color: colors.textMuted, padding: spacing.lg, fontSize: 14 },
+  pickerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 10, borderBottomWidth: 1, borderBottomColor: colors.border + '60' },
+  pickerRowSelected: { backgroundColor: colors.primary + '15' },
+  pickerTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  pickerSubtitle: { fontSize: 12, color: colors.textMuted },
+  modalFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: spacing.md, borderTopWidth: 1, borderTopColor: colors.border, gap: 12 },
+  selectedCount: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+  confirmBtn: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  confirmBtnDisabled: { opacity: 0.4 },
+  confirmBtnText: { color: colors.text, fontSize: 14, fontWeight: '700' },
 });
