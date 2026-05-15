@@ -18,6 +18,7 @@ import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { colors, spacing, ideaTypeColors } from '../../src/utils/theme';
+import { safeGoBack } from '../../src/utils/nav';
 import { Idea } from '../../src/types';
 
 const IDEA_TYPES = ['spark', 'concept', 'lyrics', 'melody', 'style', 'visual'];
@@ -82,7 +83,7 @@ export default function IdeaDetailScreen() {
       } else {
         await updateIdea(id!, form);
       }
-      router.back();
+      safeGoBack('/ideas');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save idea');
     } finally {
@@ -109,7 +110,7 @@ export default function IdeaDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => safeGoBack('/ideas')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={styles.title}>{isNew ? 'New Idea' : 'Edit Idea'}</Text>

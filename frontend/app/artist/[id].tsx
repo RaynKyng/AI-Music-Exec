@@ -21,6 +21,7 @@ import { Card } from '../../src/components/Card';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { CollabComments } from '../../src/components/CollabComments';
 import { colors, spacing } from '../../src/utils/theme';
+import { safeGoBack } from '../../src/utils/nav';
 
 export default function ArtistDetailScreen() {
   const router = useRouter();
@@ -112,7 +113,7 @@ export default function ArtistDetailScreen() {
       } else {
         await updateArtist(id!, form);
       }
-      router.back();
+      safeGoBack('/artists');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save artist');
     } finally {
@@ -158,7 +159,7 @@ export default function ArtistDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => safeGoBack('/artists')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={styles.title}>{isNew ? 'New Artist' : 'Edit Artist'}</Text>

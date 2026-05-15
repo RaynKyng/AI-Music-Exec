@@ -21,6 +21,7 @@ import { Card } from '../../src/components/Card';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { CollabComments } from '../../src/components/CollabComments';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
+import { safeGoBack } from '../../src/utils/nav';
 import { Song } from '../../src/types';
 
 const STATUS_OPTIONS = ['draft', 'in_progress', 'final', 'released'];
@@ -106,7 +107,7 @@ export default function SongDetailScreen() {
       if (!res.ok) {
         setLoading(false);
         Alert.alert('Song unavailable', 'This song could not be loaded. It may have been deleted or you don\u2019t have access to it.', [
-          { text: 'Go back', onPress: () => router.back() },
+          { text: 'Go back', onPress: () => safeGoBack('/songs') },
         ]);
         return;
       }
@@ -154,7 +155,7 @@ export default function SongDetailScreen() {
       } else {
         await updateSong(id!, form);
       }
-      router.back();
+      safeGoBack('/songs');
     } catch (error: any) {
       Alert.alert('Error', error.message || 'Failed to save song');
     } finally {
@@ -211,10 +212,9 @@ export default function SongDetailScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
+        <Pressable onPress={() => safeGoBack('/songs')} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </Pressable>
-        <Text style={styles.title}>{isNew ? 'New Song' : 'Edit Song'}</Text>
         <View style={styles.placeholder} />
       </View>
 
