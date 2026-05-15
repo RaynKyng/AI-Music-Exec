@@ -30,6 +30,17 @@ export default function AIGenerateArtistScreen() {
   const [result, setResult] = useState<any>(null);
   const [creating, setCreating] = useState(false);
   const [editName, setEditName] = useState('');
+  const [refineInput, setRefineInput] = useState('');
+  const [refining, setRefining] = useState(false);
+
+  const REFINE_SUGGESTIONS = [
+    'Make it grittier',
+    'More melodic, less aggressive',
+    'Different visual aesthetic',
+    'Stronger backstory',
+    'Shift one influence weight up',
+    'Update Suno voice',
+  ];
 
   const authFetch = async (path: string, options: RequestInit = {}) => {
     const token = await AsyncStorage.getItem('token');
@@ -104,6 +115,37 @@ export default function AIGenerateArtistScreen() {
       Alert.alert('Error', 'Could not create artist');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleRefine = async (instruction?: string) => {
+    const text = (instruction ?? refineInput).trim();
+    if (!text || !result) return;
+    setRefining(true);
+    try {
+      const res = await authFetch('/api/artists/ai-refine', {
+        method: 'POST',
+        body: JSON.stringify({
+          current_profile: result,
+          instruction: text,
+          brief: { location, influences, genres, vibe, custom_prompt: customPrompt },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Refinement failed');
+      }
+      const refined = await res.json();
+      setResult(refined);
+      setRefineInput('');
+      // If the AI suggested new names, keep the user's chosen name unless empty
+      if (!editName && (refined.primary_name || refined.name_suggestions?.[0])) {
+        setEditName(refined.primary_name || refined.name_suggestions?.[0]);
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Refinement failed');
+    } finally {
+      setRefining(false);
     }
   };
 
@@ -211,6 +253,65 @@ export default function AIGenerateArtistScreen() {
                   </Pressable>
                 </View>
                 <Text style={styles.synthesis}>{result.synthesized_profile}</Text>
+              </Card>
+
+              {/* Refine box — iterate without re-doing whole prompt */}
+              <Card style={[styles.section, styles.refineCard]}>
+                <View style={styles.refineHead}>
+                  <Ionicons name="chatbubbles-outline" size={16} color={colors.primary} />
+                  <Text style={styles.refineTitle}>Not quite? Refine this profile</Text>
+                </View>
+                <Text style={styles.refineHint}>The AI keeps the parts you like and only changes what you ask for. Try one of these or type your own:</Text>
+                <View style={styles.chipsWrap}>
+                  {REFINE_SUGGESTIONS.map((s, i) => (
+                    <Pressable
+                      key={i}
+                      style={[styles.refineChip, refining && { opacity: 0.5 }]}
+                      onPress={() => !refining && handleRefine(s)}
+                      disabled={refining}
+                    >
+                      <Text style={styles.refineChipText}>{s}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={styles.refineInputRow}>
+                  <TextInput
+                    style={styles.refineInputBox}
+                    value={refineInput}
+                    onChangeText={setRefineInput}
+                    placeholder='e.g., "make him grittier, less reggae"'
+                    placeholderTextColor={colors.textMuted}
+                    editable={!refining}
+                    multiline
+                    onSubmitEditing={() => handleRefine()}
+                  />
+                  <Pressable
+                    style={[styles.refineSendBtn, (!refineInput.trim() || refining) && { opacity: 0.4 }]}
+                    onPress={() => handleRefine()}
+                    disabled={!refineInput.trim() || refining}
+                  >
+                    {refining ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name="send" size={16} color={colors.text} />}
+                  </Pressable>
+                </View>
+                {result.refinement_history?.length > 0 && (
+                  <View style={styles.refineHistoryBox}>
+                    <Text style={styles.refineHistoryTitle}>Refinements applied ({result.refinement_history.length})</Text>
+                    {result.refinement_history.slice(-4).map((r: any, i: number) => (
+                      <Text key={i} style={styles.refineHistoryItem} numberOfLines={2}>· {r.instruction}</Text>
+                    ))}
+                  </View>
+                )}
+              </Card>
+
+              {/* Quick "Save to Roster" pinned right after refine for fast acceptance */}
+              <Card style={styles.section}>
+                <Button
+                  title={`Save "${editName || 'Unnamed Artist'}" to Roster`}
+                  onPress={handleCreate}
+                  loading={creating}
+                  icon={<Ionicons name="checkmark-circle" size={18} color={colors.text} />}
+                />
+                <Text style={styles.note}>Saves all current AI-generated fields. You can edit anytime after saving.</Text>
               </Card>
 
               {/* Name picker */}
@@ -381,6 +482,19 @@ const styles = StyleSheet.create({
   resultHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   resultTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: colors.text },
   synthesis: { fontSize: 14, color: colors.text, lineHeight: 21, fontStyle: 'italic' },
+  // Refine UI
+  refineCard: { borderWidth: 1, borderColor: colors.primary + '50' },
+  refineHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  refineTitle: { fontSize: 15, fontWeight: '700', color: colors.primary },
+  refineHint: { fontSize: 12, color: colors.textSecondary, marginBottom: 10, lineHeight: 17 },
+  refineChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.surface, marginRight: 6, marginBottom: 6 },
+  refineChipText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
+  refineInputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginTop: 8 },
+  refineInputBox: { flex: 1, backgroundColor: colors.surface, color: colors.text, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, maxHeight: 100, borderWidth: 1, borderColor: colors.border, minHeight: 40 },
+  refineSendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  refineHistoryBox: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border + '60', gap: 2 },
+  refineHistoryTitle: { fontSize: 11, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase' },
+  refineHistoryItem: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic' },
   nameChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.surfaceLight, borderWidth: 1, borderColor: colors.border },
   nameChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   nameChipText: { fontSize: 13, fontWeight: '600', color: colors.text },

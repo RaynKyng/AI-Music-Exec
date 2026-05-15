@@ -657,6 +657,92 @@ Generate a complete artist profile. Return ONLY this JSON:
         logger.error(f"AI generate artist error: {e}")
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")
 
+class ArtistRefineRequest(BaseModel):
+    current_profile: dict
+    instruction: str
+    brief: dict = {}
+
+@api_router.post("/artists/ai-refine")
+async def refine_ai_artist(data: ArtistRefineRequest, current_user: dict = Depends(get_current_user)):
+    """Iteratively refine an AI-generated artist profile. Returns the updated profile in the same shape."""
+    if not EMERGENT_LLM_KEY:
+        raise HTTPException(status_code=503, detail="AI service not configured")
+    if not data.instruction or not data.instruction.strip():
+        raise HTTPException(status_code=400, detail="instruction required")
+    if not data.current_profile:
+        raise HTTPException(status_code=400, detail="current_profile required")
+
+    brief = data.brief or {}
+    influences = brief.get("influences", [])
+    location = brief.get("location", "")
+
+    system_message = f"""You are an A&R / creative director. You will REFINE an existing AI-generated artist profile based on the user's new instruction. Keep the parts they didn't ask to change. Only modify what the instruction targets.
+
+CRITICAL OUTPUT RULES:
+- Return ONLY valid JSON, no preamble, no code-fence, no explanation
+- Preserve the EXACT same top-level keys as the input profile
+- Maintain all sub-keys inside `branding`, `influence_breakdown` items, `starter_songs` items, etc.
+- If the instruction is vague, make a reasonable creative decision but keep the existing flavor where possible
+- Do NOT include real artist names in the artist's own bio/backstory/branding (only fine in `influence_breakdown.influence` field which refers to real artists for context)
+- Suno style prompts (in `suno_voice` and `starter_songs[].suno_style`) MUST use sonic descriptors only — NEVER real artist names
+- Keep the same JSON structure so the frontend doesn't break"""
+
+    user_text = f"""ORIGINAL BRIEF:
+- Location: {location or 'unspecified'}
+- Real-life influences: {', '.join(influences) if influences else 'unspecified'}
+- Genres: {', '.join(brief.get('genres', []))}
+- Vibe: {brief.get('vibe', '')}
+- Custom direction: {brief.get('custom_prompt', '')}
+
+CURRENT PROFILE (refine THIS in place):
+{json.dumps(data.current_profile, indent=2)}
+
+REFINEMENT INSTRUCTION FROM USER:
+"{data.instruction}"
+
+Return the FULL refined profile JSON with the same keys. No markdown fence, no explanation, just the JSON."""
+
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"artist-refine-{current_user['id']}-{int(datetime.utcnow().timestamp())}",
+            system_message=system_message,
+        ).with_model("openai", "gpt-5.2")
+        response = await chat.send_message(UserMessage(text=user_text))
+
+        # Strip potential code fences and parse JSON
+        raw = response.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```(?:json)?\s*", "", raw)
+            raw = re.sub(r"\s*```\s*$", "", raw)
+        try:
+            refined = json.loads(raw)
+        except Exception:
+            # Fallback: try to extract the largest JSON object from the response
+            m = re.search(r"\{.*\}", raw, re.DOTALL)
+            if not m:
+                raise HTTPException(status_code=500, detail="AI refinement returned non-JSON output")
+            refined = json.loads(m.group(0))
+
+        # Preserve any keys the AI may have dropped by merging on top of the original
+        merged = {**data.current_profile, **refined}
+        # Track refinement history for the UI
+        history = merged.get("refinement_history", [])
+        if not isinstance(history, list):
+            history = []
+        history.append({
+            "instruction": data.instruction,
+            "timestamp": datetime.utcnow().isoformat(),
+            "user_name": current_user.get("name", ""),
+        })
+        merged["refinement_history"] = history
+        return merged
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"AI refine artist error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI refinement failed: {str(e)}")
+
 @api_router.post("/artists/from-ai-generation")
 async def create_artist_from_ai(data: dict, current_user: dict = Depends(get_current_user)):
     """Create an artist record using a previously-generated AI profile, saving the full generation log to saved_prompts."""

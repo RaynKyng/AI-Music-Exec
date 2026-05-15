@@ -290,10 +290,24 @@ frontend:
         comment: "PASS 28/28 (see /app/backend_push_test.py). POST /api/users/push-token: 200+ok=true on register, de-duplicates (2 calls same token → 1 token in users.expo_push_tokens), 400 on empty push_token, 422 on missing field, 403 without auth. DELETE /api/users/push-token: 200+ok=true on existing, 200 on non-existent (idempotent), 403 without auth. POST /api/notifications/test: 400 when 0 tokens registered, 200 {ok:true,sent:1,tokens:1} after register — confirmed real Expo API call (https://exp.host/--/api/v2/push/send) succeeds and returns DeviceNotRegistered ticket for fake ExponentPushToken (logged: 'push_service - INFO - Removing dead Expo token: ExponentPushToken[abc123-fake-...'); endpoint correctly returns 200 not 500. CRUD regressions all pass — POST /songs, PUT /songs (status change), POST /ideas (newly logs activity), POST /comments (newly logs activity), POST /songs/{id}/re-analyze (200 with Emergent LLM, push hook does not 500). GET /songs/{id}/activity returns full timeline including created/updated/commented/reanalyzed actions. Notify-team flow verified: A generates invite code, B joins via /team/join, both share team_id, B registers push token, A creates song → log_activity fires push_service.notify_team to B (HTTP egress to Expo with DeviceNotRegistered ticket logged), song creation returns 200, activity doc persisted in db.activities. B leaves team cleanly. NO REGRESSIONS observed in any existing CRUD path due to push_service import or activity hook."
 
 test_plan:
-  current_focus: []
+  current_focus:
+    - "AI Artist Refine Endpoint (POST /api/artists/ai-refine)"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
+
+backend_ai_refine_2026_05:
+  - task: "AI Artist Refine Endpoint (POST /api/artists/ai-refine)"
+    implemented: true
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 1
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: false
+        agent: "testing"
+        comment: "FAIL — 10/11 PASS in /app/backend_ai_refine_test.py against public preview URL. CRITICAL BUG: POST /api/artists/ai-refine returns 500 Internal Server Error in ~0.2s (before any LLM call). Backend traceback in /var/log/supervisor/backend.err.log: `File \"/app/backend/server.py\", line 698, in refine_ai_artist  {json.dumps(data.current_profile, indent=2)}  NameError: name 'json' is not defined`. ROOT CAUSE: server.py imports `json` only LOCALLY inside ai_generate_artist (line 644 `import json`); refine_ai_artist at lines 698, 719, 725 calls json.dumps / json.loads but there is no module-level `import json`. FIX: add `import json` to the top-of-file imports (near `import os`, `import re`). All other assertions pass: ai-generate returned 200 in 37.9s with full profile (primary_name='Harbor Veda', plus synthesized_profile/bio/branding/name_suggestions/backstory/suno_voice_suggestion/suno_style_template/influence_breakdown/first_3_song_ideas/next_steps/themes/tone/unique_sound/genres/suno_exclusions). Negative cases all pass: empty instruction → 400 {detail:'instruction required'}, whitespace-only instruction → 400, empty current_profile → 400 {detail:'current_profile required'}, no auth → 403 {detail:'Not authenticated'} (note: 403 not 401, which is correct for HTTPBearer with auto_error=True). The 503-when-EMERGENT_LLM_KEY-missing path was NOT exercised (key is present in this env) but the code path at line 668 is correct. Cannot verify the happy-path behavior (refined profile shape, refinement_history append, diff vs original) until the json import is fixed and the endpoint is re-tested."
 
 backend_brainstorm_2026_05:
   - task: "Playlist Brainstorm Workspace endpoints (GET/POST/DELETE/save-song) + log_activity 'brainstormed'"

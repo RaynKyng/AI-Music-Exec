@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthStore } from '../../src/stores/authStore';
 import { useDataStore } from '../../src/stores/dataStore';
 import { Card } from '../../src/components/Card';
+import { TeamActivityFeed } from '../../src/components/TeamActivityFeed';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
 
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -193,6 +194,9 @@ export default function Dashboard() {
             </View>
           )}
         </Card>
+
+        {/* Team Activity Feed */}
+        <TeamActivityFeed />
 
         {/* Recent Songs */}
         <Text style={styles.sectionTitle}>Recent Songs</Text>
