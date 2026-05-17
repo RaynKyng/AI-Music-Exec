@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert,
   Modal, KeyboardAvoidingView, Platform, TextInput, Pressable, Linking,
@@ -20,12 +20,28 @@ import { Song } from '../../src/types';
 const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 const STATUS_FILTERS = ['all', 'draft', 'in_progress', 'final', 'released'];
 
+// Authorship: original / ai_generated / collab / cover (cover may be a future value)
+const AUTHORSHIP_OPTIONS: { id: string; label: string; icon: any; color: string }[] = [
+  { id: 'original', label: 'Written', icon: 'create', color: colors.success },
+  { id: 'collab', label: 'Collab', icon: 'people', color: colors.warning },
+  { id: 'ai_generated', label: 'AI', icon: 'sparkles', color: colors.primary },
+  { id: 'cover', label: 'Cover', icon: 'musical-notes', color: colors.secondary },
+];
+
+const SORT_OPTIONS = [
+  { id: 'recent', label: 'Recent', icon: 'time' },
+  { id: 'title_asc', label: 'A-Z', icon: 'text' },
+  { id: 'title_desc', label: 'Z-A', icon: 'text' },
+];
+
 export default function SongsScreen() {
   const router = useRouter();
   const { songs, artists, fetchSongs, fetchArtists, deleteSong } = useDataStore();
   const [refreshing, setRefreshing] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [artistFilter, setArtistFilter] = useState<string | null>(null);
+  const [authorshipFilter, setAuthorshipFilter] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<'recent' | 'title_asc' | 'title_desc'>('recent');
   const [search, setSearch] = useState('');
   // CSV Import
   const [importModal, setImportModal] = useState(false);
@@ -79,6 +95,55 @@ export default function SongsScreen() {
   const getArtistName = (artistId: string | null) => {
     if (!artistId) return 'Unassigned';
     return artists.find(a => a.id === artistId)?.name || 'Unknown';
+  };
+
+  // Client-side filter + sort. The backend already handles status/artist/search,
+  // but we re-apply locally so multi-select & sort work without an extra round-trip.
+  const displaySongs = useMemo(() => {
+    let list = Array.isArray(songs) ? [...songs] : [];
+
+    if (authorshipFilter) {
+      list = list.filter(s => ((s as any).authorship || 'original') === authorshipFilter);
+    }
+
+    switch (sortBy) {
+      case 'title_asc':
+        list.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+        break;
+      case 'title_desc':
+        list.sort((a, b) => (b.title || '').localeCompare(a.title || ''));
+        break;
+      case 'recent':
+      default:
+        list.sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime());
+        break;
+    }
+
+    return list;
+  }, [songs, authorshipFilter, sortBy]);
+
+  const activeFilterCount =
+    (statusFilter !== 'all' ? 1 : 0) +
+    (artistFilter ? 1 : 0) +
+    (authorshipFilter ? 1 : 0) +
+    (sortBy !== 'recent' ? 1 : 0);
+
+  const clearAllFilters = () => {
+    setStatusFilter('all');
+    setArtistFilter(null);
+    setAuthorshipFilter(null);
+    setSortBy('recent');
+    applyFilters('', 'all', null);
+  };
+
+  const renderAuthorshipBadge = (authorship?: string) => {
+    const opt = AUTHORSHIP_OPTIONS.find(o => o.id === (authorship || 'original'));
+    if (!opt) return null;
+    return (
+      <View style={[styles.authBadge, { backgroundColor: opt.color + '20', borderColor: opt.color }]}>
+        <Ionicons name={opt.icon} size={10} color={opt.color} />
+      </View>
+    );
   };
 
   const handleDelete = (song: Song) => {
@@ -156,6 +221,46 @@ export default function SongsScreen() {
         ))}
       </ScrollView>
 
+      {/* Sort row */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContainer}>
+        {SORT_OPTIONS.map((opt) => (
+          <Pressable
+            key={opt.id}
+            style={[styles.sortChip, sortBy === opt.id && styles.sortChipActive]}
+            onPress={() => setSortBy(opt.id as any)}
+          >
+            <Ionicons name={opt.icon as any} size={13} color={sortBy === opt.id ? colors.text : colors.textSecondary} />
+            <Text style={[styles.sortText, sortBy === opt.id && styles.sortTextActive]}>{opt.label}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* Authorship row */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContainer}>
+        <Pressable
+          style={[styles.authChip, !authorshipFilter && styles.authChipActive]}
+          onPress={() => setAuthorshipFilter(null)}
+        >
+          <Text style={[styles.authChipText, !authorshipFilter && styles.authChipTextActive]}>All Origins</Text>
+        </Pressable>
+        {AUTHORSHIP_OPTIONS.map((opt) => {
+          const active = authorshipFilter === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[
+                styles.authChip,
+                active && { backgroundColor: opt.color + '30', borderColor: opt.color },
+              ]}
+              onPress={() => setAuthorshipFilter(active ? null : opt.id)}
+            >
+              <Ionicons name={opt.icon} size={13} color={active ? opt.color : colors.textSecondary} />
+              <Text style={[styles.authChipText, active && { color: opt.color, fontWeight: '700' as const }]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       {artists.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll} contentContainerStyle={styles.filterContainer}>
           <TouchableOpacity style={[styles.artistChip, !artistFilter && styles.artistChipActive]}
@@ -173,11 +278,25 @@ export default function SongsScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
-        {songs.length === 0 ? (
+
+        {/* Count + Clear All */}
+        <View style={styles.countRow}>
+          <Text style={styles.countLabel}>
+            {displaySongs.length} song{displaySongs.length !== 1 ? 's' : ''}
+          </Text>
+          {activeFilterCount > 0 && (
+            <Pressable onPress={clearAllFilters} style={styles.clearAllBtn} hitSlop={6}>
+              <Ionicons name="close-circle" size={14} color={colors.primary} />
+              <Text style={styles.clearAllText}>Clear filters</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {displaySongs.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="disc-outline" size={64} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No Songs Found</Text>
-            <Text style={styles.emptyText}>{search ? `No results for "${search}"` : 'Start building your catalog'}</Text>
+            <Text style={styles.emptyText}>{search || activeFilterCount > 0 ? 'Try clearing filters or search' : 'Start building your catalog'}</Text>
             <View style={styles.emptyActions}>
               <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/song/new')}>
                 <Ionicons name="add" size={20} color={colors.text} />
@@ -192,7 +311,7 @@ export default function SongsScreen() {
         ) : viewMode === 'list' ? (
           // === COMPACT LIST VIEW (default) ===
           <View style={styles.listContainer}>
-            {songs.map((song) => {
+            {displaySongs.map((song) => {
               const playUrl = song.suno_generations?.[0]?.suno_url || song.versions?.find(v => v.suno_link)?.suno_link;
               return (
                 <Pressable
@@ -207,7 +326,10 @@ export default function SongsScreen() {
                   }}
                 >
                   <View style={styles.listRowLeft}>
-                    <Text style={styles.listTitle} numberOfLines={1}>{song.title}</Text>
+                    <View style={styles.titleRow}>
+                      {renderAuthorshipBadge((song as any).authorship)}
+                      <Text style={styles.listTitle} numberOfLines={1}>{song.title}</Text>
+                    </View>
                     <Text style={styles.listSubtitle} numberOfLines={1}>
                       {getArtistName(song.artist_id)}
                       {(song as any).featured_artist_ids?.length > 0 && ` ft. ${(song as any).featured_artist_ids.map((id: string) => getArtistName(id)).join(', ')}`}
@@ -258,11 +380,14 @@ export default function SongsScreen() {
             })}
           </View>
         ) : (
-          songs.map((song) => (
+          displaySongs.map((song) => (
             <Card key={song.id} style={styles.songCard} onPress={() => router.push(`/song/${song.id}`)}>
               <View style={styles.songHeader}>
                 <View style={styles.songInfo}>
-                  <Text style={styles.songTitle}>{song.title}</Text>
+                  <View style={styles.titleRow}>
+                    {renderAuthorshipBadge((song as any).authorship)}
+                    <Text style={styles.songTitle} numberOfLines={1}>{song.title}</Text>
+                  </View>
                   <Text style={styles.artistName}>
                     {getArtistName(song.artist_id)}
                     {(song as any).featured_artist_ids?.length > 0 && (
@@ -437,7 +562,7 @@ const styles = StyleSheet.create({
   listRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: colors.border + '60', minHeight: 56 },
   listRowPressed: { backgroundColor: colors.surfaceLight },
   listRowLeft: { flex: 1, marginRight: 8, gap: 2 },
-  listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  listTitle: { fontSize: 15, fontWeight: '600', color: colors.text, flexShrink: 1 },
   listSubtitle: { fontSize: 12, color: colors.textMuted },
   listRowRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   listStatusBadge: { transform: [{ scale: 0.85 }], marginRight: 2 },
@@ -451,6 +576,24 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500', textTransform: 'capitalize' },
   filterTextActive: { color: colors.text },
+  // Sort chips
+  sortChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 4 },
+  sortChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sortText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
+  sortTextActive: { color: colors.text },
+  // Authorship chips
+  authChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, gap: 4 },
+  authChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  authChipText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
+  authChipTextActive: { color: colors.text },
+  // Authorship inline badge (next to title)
+  authBadge: { width: 18, height: 18, borderRadius: 9, borderWidth: 1, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', flexShrink: 1 },
+  // Count + clear filters row
+  countRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
+  countLabel: { fontSize: 12, color: colors.textMuted },
+  clearAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  clearAllText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   artistChip: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.surfaceLight },
   artistChipActive: { backgroundColor: colors.secondary },
   artistChipText: { color: colors.textSecondary, fontSize: 13, fontWeight: '500' },
@@ -466,7 +609,7 @@ const styles = StyleSheet.create({
   songCard: { marginBottom: spacing.md },
   songHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   songInfo: { flex: 1, marginRight: spacing.md },
-  songTitle: { fontSize: 18, fontWeight: '600', color: colors.text },
+  songTitle: { fontSize: 18, fontWeight: '600', color: colors.text, flexShrink: 1 },
   artistName: { fontSize: 14, color: colors.primary, marginTop: 2 },
   metaRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm, flexWrap: 'wrap' },
   metaBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceLight, paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 8, gap: 4 },
