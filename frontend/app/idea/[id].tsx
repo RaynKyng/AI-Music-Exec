@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useDataStore } from '../../src/stores/dataStore';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
