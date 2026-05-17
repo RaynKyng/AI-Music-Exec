@@ -1331,6 +1331,8 @@ class QuickAddSong(BaseModel):
     style_prompt: str = ""
     artist_id: Optional[str] = None
     authorship: str = "original"  # original, ai_generated, collab
+    collection_id: Optional[str] = None  # primary release/album
+    playlist_ids: List[str] = []         # additional playlists this song belongs to
 
 @api_router.post("/songs/quick-add")
 async def quick_add_song(data: QuickAddSong, current_user: dict = Depends(get_current_user)):
@@ -1344,7 +1346,8 @@ async def quick_add_song(data: QuickAddSong, current_user: dict = Depends(get_cu
         "title": data.title,
         "artist_id": data.artist_id,
         "featured_artist_ids": [],
-        "collection_id": None,
+        "collection_id": data.collection_id,
+        "playlist_ids": data.playlist_ids or [],
         "lyrics": data.lyrics,
         "authorship": data.authorship,
         "style_prompt": data.style_prompt,
@@ -1369,6 +1372,19 @@ async def quick_add_song(data: QuickAddSong, current_user: dict = Depends(get_cu
     await db.songs.insert_one(song_dict)
     if data.artist_id:
         await db.artists.update_one({"id": data.artist_id}, {"$inc": {"song_count": 1}})
+
+    # Recount tracks for any collections this song was added to (consistent with PUT /collections handler)
+    affected_collection_ids: List[str] = []
+    if data.collection_id:
+        affected_collection_ids.append(data.collection_id)
+    for pid in (data.playlist_ids or []):
+        if pid and pid not in affected_collection_ids:
+            affected_collection_ids.append(pid)
+    for cid in affected_collection_ids:
+        track_count = await db.songs.count_documents(team_query(current_user, {
+            "$or": [{"collection_id": cid}, {"playlist_ids": cid}]
+        }))
+        await db.collections.update_one({"id": cid}, {"$set": {"track_count": track_count, "updated_at": datetime.utcnow()}})
     
     # AI Analysis if we have content to analyze
     ai_suggestions = None

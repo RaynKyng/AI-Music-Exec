@@ -30,7 +30,50 @@ export default function QuickAddScreen() {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<any>(null);
 
-  useEffect(() => { fetchArtists(); }, []);
+  // Release / Playlist assignment
+  const [collections, setCollections] = useState<any[]>([]);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+  const [playlistIds, setPlaylistIds] = useState<string[]>([]);
+
+  useEffect(() => { fetchArtists(); loadCollections(); }, []);
+
+  const loadCollections = async () => {
+    try {
+      const token = await AsyncStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/collections`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setCollections(Array.isArray(data) ? data : []);
+    } catch { /* ignore */ }
+  };
+
+  // Releases relevant to the currently chosen artist (non-playlist types only).
+  // When no artist is picked, hide releases (they need an artist) — playlists stay artist-agnostic.
+  const releaseOptions = React.useMemo(() => {
+    return collections.filter((c: any) => {
+      const isPlaylist = (c.collection_type || '').toLowerCase() === 'playlist';
+      if (isPlaylist) return false;
+      if (!artistId) return false;
+      return c.artist_id === artistId;
+    });
+  }, [collections, artistId]);
+
+  const playlistOptions = React.useMemo(() => {
+    return collections.filter((c: any) => (c.collection_type || '').toLowerCase() === 'playlist');
+  }, [collections]);
+
+  const togglePlaylist = (id: string) => {
+    setPlaylistIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  // Reset the release pick when the artist changes (since releases are artist-scoped)
+  useEffect(() => {
+    if (collectionId && !releaseOptions.find((c: any) => c.id === collectionId)) {
+      setCollectionId(null);
+    }
+  }, [artistId, releaseOptions, collectionId]);
 
   const authFetch = async (url: string, options: RequestInit = {}) => {
     const token = await AsyncStorage.getItem('token');
@@ -43,7 +86,15 @@ export default function QuickAddScreen() {
     try {
       const res = await authFetch(`${API_URL}/api/songs/quick-add`, {
         method: 'POST',
-        body: JSON.stringify({ title, lyrics, style_prompt: stylePrompt, artist_id: artistId, authorship }),
+        body: JSON.stringify({
+          title,
+          lyrics,
+          style_prompt: stylePrompt,
+          artist_id: artistId,
+          authorship,
+          collection_id: collectionId,
+          playlist_ids: playlistIds,
+        }),
       });
       if (!res.ok) throw new Error('Failed');
       const data = await res.json();
@@ -124,6 +175,67 @@ export default function QuickAddScreen() {
                         <Text style={[styles.chipText, artistId === a.id && styles.chipTextActive]}>{a.name}</Text>
                       </Pressable>
                     ))}
+                  </ScrollView>
+                </>
+              )}
+
+              {/* Release picker — appears only when an artist is selected and that artist has at least one release. */}
+              {artistId && releaseOptions.length > 0 && (
+                <>
+                  <View style={styles.labelRow}>
+                    <Ionicons name="albums" size={14} color={colors.primary} />
+                    <Text style={styles.label}>Add to Release (optional)</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
+                    <Pressable
+                      style={[styles.chip, !collectionId && styles.chipActive]}
+                      onPress={() => setCollectionId(null)}
+                    >
+                      <Text style={[styles.chipText, !collectionId && styles.chipTextActive]}>None</Text>
+                    </Pressable>
+                    {releaseOptions.map((c: any) => (
+                      <Pressable
+                        key={c.id}
+                        style={[styles.chip, collectionId === c.id && styles.chipActive]}
+                        onPress={() => setCollectionId(collectionId === c.id ? null : c.id)}
+                      >
+                        <Text style={[styles.chipText, collectionId === c.id && styles.chipTextActive]} numberOfLines={1}>
+                          {c.title} · {c.collection_type}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+
+              {/* Playlist multi-picker — playlists are artist-agnostic so always available */}
+              {playlistOptions.length > 0 && (
+                <>
+                  <View style={styles.labelRow}>
+                    <Ionicons name="musical-notes" size={14} color={colors.secondary} />
+                    <Text style={styles.label}>Add to Playlist(s) (optional)</Text>
+                    {playlistIds.length > 0 && (
+                      <Text style={styles.countPill}>{playlistIds.length}</Text>
+                    )}
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.artistScroll}>
+                    {playlistOptions.map((c: any) => {
+                      const active = playlistIds.includes(c.id);
+                      return (
+                        <Pressable
+                          key={c.id}
+                          style={[
+                            styles.chip,
+                            active && { backgroundColor: colors.secondary },
+                          ]}
+                          onPress={() => togglePlaylist(c.id)}
+                        >
+                          <Text style={[styles.chipText, active && styles.chipTextActive]} numberOfLines={1}>
+                            {active ? '✓ ' : ''}{c.title}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
                   </ScrollView>
                 </>
               )}
@@ -282,6 +394,8 @@ const styles = StyleSheet.create({
   desc: { fontSize: 14, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 20 },
   lyricsInput: { minHeight: 150 },
   label: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: spacing.sm, marginTop: spacing.sm },
+  labelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
+  countPill: { fontSize: 11, fontWeight: '700', color: colors.text, backgroundColor: colors.secondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, overflow: 'hidden', marginLeft: 4 },
   authRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
   authChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: colors.surfaceLight, gap: 6 },
   authChipActive: { backgroundColor: colors.primary },
