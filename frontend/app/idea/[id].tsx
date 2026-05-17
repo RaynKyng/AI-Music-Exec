@@ -32,6 +32,7 @@ export default function IdeaDetailScreen() {
   
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(false);
   const [form, setForm] = useState({
     title: '',
     content: '',
@@ -104,6 +105,47 @@ export default function IdeaDetailScreen() {
     setForm({ ...form, tags: updated });
   };
 
+  const buildAIPrompt = () => {
+    // Compose a clean, well-structured pre-filled message for the AI Assistant.
+    const lines: string[] = [];
+    lines.push(`I want to develop this ${form.type} idea further:\n`);
+    if (form.title) lines.push(`Title: ${form.title}`);
+    if (form.content) lines.push(`\n${form.content}`);
+    if (form.tags.length > 0) lines.push(`\nTags: ${form.tags.map(t => `#${t}`).join(' ')}`);
+    const linkedArtist = form.linked_artist_id ? artists.find(a => a.id === form.linked_artist_id) : null;
+    const linkedSong = form.linked_song_id ? songs.find(s => s.id === form.linked_song_id) : null;
+    if (linkedArtist) lines.push(`\nLinked artist: ${linkedArtist.name}`);
+    if (linkedSong) lines.push(`Linked song: ${linkedSong.title}`);
+    lines.push('\nWhat are some directions I could take this? Suggest concrete next steps.');
+    return lines.join('\n');
+  };
+
+  const discussWithAI = () => {
+    if (!form.title.trim() && !form.content.trim()) {
+      Alert.alert('Add some content', 'Add a title or some content before discussing with AI.');
+      return;
+    }
+    const prefill = buildAIPrompt();
+    router.push({
+      pathname: '/assistant',
+      params: {
+        prefill,
+        sourceLabel: form.title || 'Untitled idea',
+        artistId: form.linked_artist_id || undefined,
+        songId: form.linked_song_id || undefined,
+      } as any,
+    });
+  };
+
+  const copyContent = async () => {
+    if (!form.content.trim()) {
+      Alert.alert('Nothing to copy', 'There is no content in this idea yet.');
+      return;
+    }
+    await Clipboard.setStringAsync(form.content);
+    Alert.alert('Copied', 'Idea content copied to clipboard.');
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -162,7 +204,29 @@ export default function IdeaDetailScreen() {
           </Card>
 
           <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Details</Text>
+            <View style={styles.detailsHeader}>
+              <Text style={styles.sectionTitle}>Details</Text>
+              <View style={styles.detailsHeaderActions}>
+                {form.content ? (
+                  <Pressable onPress={copyContent} style={styles.iconAction} hitSlop={6} accessibilityLabel="Copy idea content">
+                    <Ionicons name="copy-outline" size={16} color={colors.textSecondary} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  onPress={() => setContentExpanded(!contentExpanded)}
+                  style={styles.iconAction}
+                  hitSlop={6}
+                  accessibilityLabel={contentExpanded ? 'Collapse content' : 'Expand content'}
+                >
+                  <Ionicons
+                    name={contentExpanded ? 'contract-outline' : 'expand-outline'}
+                    size={16}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.iconActionText}>{contentExpanded ? 'Collapse' : 'Expand'}</Text>
+                </Pressable>
+              </View>
+            </View>
             <Input
               label="Title *"
               placeholder="What's the idea?"
@@ -175,9 +239,13 @@ export default function IdeaDetailScreen() {
               value={form.content}
               onChangeText={(text) => setForm({ ...form, content: text })}
               multiline
-              numberOfLines={8}
-              style={styles.contentInput}
+              numberOfLines={contentExpanded ? 20 : 8}
+              style={contentExpanded ? styles.contentInputExpanded : styles.contentInput}
             />
+            <Pressable onPress={discussWithAI} style={styles.aiBtn} accessibilityLabel="Discuss this idea with AI">
+              <Ionicons name="sparkles" size={16} color={colors.text} />
+              <Text style={styles.aiBtnText}>Discuss with AI</Text>
+            </Pressable>
           </Card>
 
           <Card style={styles.section}>
@@ -356,6 +424,50 @@ const styles = StyleSheet.create({
   },
   contentInput: {
     minHeight: 150,
+  },
+  contentInputExpanded: {
+    minHeight: 400,
+    textAlignVertical: 'top',
+  },
+  detailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  detailsHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  iconAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.surfaceLight,
+  },
+  iconActionText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  aiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: spacing.sm,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+  },
+  aiBtnText: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
   },
   tagInputRow: {
     flexDirection: 'row',

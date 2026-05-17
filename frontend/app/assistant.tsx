@@ -31,7 +31,7 @@ const SUGGESTED_PROMPTS = [
 
 export default function AssistantScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ artistId?: string; songId?: string }>();
+  const params = useLocalSearchParams<{ artistId?: string; songId?: string; prefill?: string; sourceLabel?: string }>();
   const { artists, songs, fetchArtists, fetchSongs } = useDataStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -40,12 +40,24 @@ export default function AssistantScreen() {
   const [linkedArtistId, setLinkedArtistId] = useState<string | null>(params.artistId || null);
   const [linkedSongId, setLinkedSongId] = useState<string | null>(params.songId || null);
   const [showContext, setShowContext] = useState(false);
+  const [sourceLabel, setSourceLabel] = useState<string | null>(params.sourceLabel || null);
   const scrollRef = useRef<ScrollView>(null);
+  const prefillApplied = useRef(false);
 
   useEffect(() => {
     fetchArtists();
     fetchSongs();
   }, []);
+
+  // Apply prefill from route params (e.g. "Discuss with AI" from Idea screen).
+  // Only runs once per mount so navigating back doesn't re-overwrite user edits.
+  useEffect(() => {
+    if (prefillApplied.current) return;
+    if (params.prefill && typeof params.prefill === 'string' && params.prefill.length > 0) {
+      setInput(params.prefill);
+      prefillApplied.current = true;
+    }
+  }, [params.prefill]);
 
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -70,7 +82,37 @@ export default function AssistantScreen() {
           session_id: sessionId,
         }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        // Try to surface a friendlier message for known failure modes
+        let detail = '';
+        try {
+          const errBody = await res.json();
+          detail = (errBody?.detail || '').toString();
+        } catch {}
+        const lower = detail.toLowerCase();
+        const isBudget =
+          lower.includes('budget') ||
+          lower.includes('credit') ||
+          lower.includes('quota') ||
+          lower.includes('insufficient') ||
+          lower.includes('exhausted') ||
+          lower.includes('rate limit') ||
+          lower.includes('429');
+        if (isBudget) {
+          Alert.alert(
+            'AI Credits Exhausted',
+            'Your Emergent LLM key has run out of credits. Top up your key from your Emergent profile (Universal Key) and try again.'
+          );
+        } else if (res.status === 503) {
+          Alert.alert('AI Not Configured', 'The AI service is not set up. Please contact support.');
+        } else {
+          Alert.alert('AI Unavailable', detail || 'AI is unavailable. Try again in a moment.');
+        }
+        // Roll back the optimistic user message so they can retry without retyping
+        setMessages(prev => prev.filter(m => m.id !== userMsg.id));
+        setInput(messageText);
+        return;
+      }
       const data = await res.json();
       setSessionId(data.session_id);
       const aiMsg: Message = {
@@ -80,8 +122,17 @@ export default function AssistantScreen() {
         timestamp: Date.now(),
       };
       setMessages(prev => [...prev, aiMsg]);
-    } catch (e) {
-      Alert.alert('Error', 'AI is unavailable. Try again in a moment.');
+    } catch (e: any) {
+      const msg = (e?.message || '').toString().toLowerCase();
+      const isBudget = msg.includes('budget') || msg.includes('credit') || msg.includes('quota');
+      Alert.alert(
+        isBudget ? 'AI Credits Exhausted' : 'Network Error',
+        isBudget
+          ? 'Your Emergent LLM key has run out of credits. Top it up from your Emergent profile.'
+          : 'Could not reach the AI service. Check your connection and try again.'
+      );
+      setMessages(prev => prev.filter(m => m.id !== userMsg.id));
+      setInput(messageText);
     } finally {
       setSending(false);
     }
@@ -179,6 +230,16 @@ export default function AssistantScreen() {
         </View>
       )}
 
+      {sourceLabel ? (
+        <View style={styles.sourceBanner}>
+          <Ionicons name="bulb" size={14} color={colors.primary} />
+          <Text style={styles.sourceBannerText} numberOfLines={1}>Loaded from: {sourceLabel}</Text>
+          <Pressable hitSlop={8} onPress={() => setSourceLabel(null)}>
+            <Ionicons name="close" size={14} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.flex} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
         <ScrollView ref={scrollRef} style={styles.messagesScroll} contentContainerStyle={styles.messagesContent}>
           {messages.length === 0 ? (
@@ -256,6 +317,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 17, fontWeight: '700', color: colors.text },
   subtitle: { fontSize: 11, color: colors.textSecondary, marginTop: 1 },
   contextBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, paddingVertical: 10, gap: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.surface },
+  sourceBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: spacing.md, paddingVertical: 8, backgroundColor: colors.primary + '15', borderBottomWidth: 1, borderBottomColor: colors.primary + '30' },
+  sourceBannerText: { flex: 1, fontSize: 12, color: colors.primary, fontWeight: '500' },
   contextText: { flex: 1, fontSize: 12, color: colors.textSecondary },
   contextPanel: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
   contextLabel: { fontSize: 11, fontWeight: '600', color: colors.textMuted, marginTop: 6, marginBottom: 6, textTransform: 'uppercase' },

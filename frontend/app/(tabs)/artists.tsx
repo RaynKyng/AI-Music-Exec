@@ -57,13 +57,15 @@ export default function ArtistsScreen() {
   // Collect all unique genres from artists
   const allGenres = useMemo(() => {
     const genres = new Set<string>();
-    artists.forEach(a => a.genres?.forEach(g => genres.add(g)));
+    if (Array.isArray(artists)) {
+      artists.forEach(a => a.genres?.forEach(g => genres.add(g)));
+    }
     return Array.from(genres).sort();
   }, [artists]);
 
   // Filter and sort
   const displayArtists = useMemo(() => {
-    let list = [...artists];
+    let list = Array.isArray(artists) ? [...artists] : [];
 
     // Genre filter
     if (genreFilter) {
@@ -98,7 +100,7 @@ export default function ArtistsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Artist Roster</Text>
+        <Text style={styles.title} numberOfLines={1}>Artist Roster</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             testID="view-toggle-btn"
@@ -108,9 +110,13 @@ export default function ArtistsScreen() {
           >
             <Ionicons name={viewMode === 'list' ? 'grid-outline' : 'list-outline'} size={20} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity testID="ai-generate-artist-btn" style={styles.aiGenButton} onPress={() => router.push('/artist/ai-generate')}>
-            <Ionicons name="sparkles" size={16} color={colors.primary} />
-            <Text style={styles.aiGenText}>AI Generate</Text>
+          <TouchableOpacity
+            testID="ai-generate-artist-btn"
+            style={styles.aiGenButton}
+            onPress={() => router.push('/artist/ai-generate')}
+            accessibilityLabel="AI Generate Artist"
+          >
+            <Ionicons name="sparkles" size={18} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity testID="add-artist-btn" style={styles.addButton} onPress={() => router.push('/artist/new')}>
             <Ionicons name="add" size={24} color={colors.text} />
@@ -267,9 +273,9 @@ export default function ArtistsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  title: { fontSize: 28, fontWeight: '700', color: colors.text },
-  addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
+  title: { fontSize: 24, fontWeight: '700', color: colors.text, flex: 1, flexShrink: 1 },
+  addButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   viewToggleBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   // Compact list view
   listContainer: { backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
@@ -281,8 +287,8 @@ const styles = StyleSheet.create({
   listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
   listSubtitle: { fontSize: 12, color: colors.textMuted },
   listIconBtn: { padding: 6, borderRadius: 8 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  aiGenButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, flexShrink: 0 },
+  aiGenButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   aiGenText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   filterRow: { maxHeight: 40, marginBottom: spacing.xs },
@@ -313,12 +319,12 @@ const styles = StyleSheet.create({
   artistGenres: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
   deleteBtn: { padding: spacing.sm, minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
   artistSound: { fontSize: 14, color: colors.textSecondary, marginTop: spacing.md, fontStyle: 'italic' },
-  artistFooter: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm },
+  artistFooter: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm, flexWrap: 'wrap' },
   songCount: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   songCountText: { fontSize: 14, color: colors.textSecondary },
-  toneBadge: { backgroundColor: colors.primary + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
+  toneBadge: { backgroundColor: colors.primary + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, maxWidth: 140 },
   toneText: { fontSize: 11, color: colors.primary, fontWeight: '500' },
-  themes: { flexDirection: 'row', flex: 1, justifyContent: 'flex-end', gap: spacing.xs },
-  themeBadge: { backgroundColor: colors.surfaceLight, paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 8 },
+  themes: { flexDirection: 'row', flexShrink: 1, flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing.xs, marginLeft: 'auto' },
+  themeBadge: { backgroundColor: colors.surfaceLight, paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: 8, maxWidth: 120 },
   themeText: { fontSize: 12, color: colors.textSecondary },
 });

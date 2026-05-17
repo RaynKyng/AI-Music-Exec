@@ -115,7 +115,7 @@ export default function SongsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Song Catalog</Text>
+        <Text style={styles.title} numberOfLines={1}>Songs</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity
             testID="view-toggle-btn"
@@ -129,11 +129,10 @@ export default function SongsScreen() {
               color={colors.primary}
             />
           </TouchableOpacity>
-          <TouchableOpacity testID="quick-add-btn" style={styles.quickAddButton} onPress={() => router.push('/song/quick-add')}>
-            <Ionicons name="sparkles" size={18} color={colors.text} />
-            <Text style={styles.quickAddText}>Quick AI</Text>
+          <TouchableOpacity testID="quick-add-btn" style={styles.quickAddButton} onPress={() => router.push('/song/quick-add')} accessibilityLabel="Quick AI Add">
+            <Ionicons name="sparkles" size={18} color={colors.primary} />
           </TouchableOpacity>
-          <TouchableOpacity testID="csv-import-btn" style={styles.importButton} onPress={() => { setImportModal(true); setImportResult(null); setCsvText(''); }}>
+          <TouchableOpacity testID="csv-import-btn" style={styles.importButton} onPress={() => { setImportModal(true); setImportResult(null); setCsvText(''); }} accessibilityLabel="Import CSV">
             <Ionicons name="cloud-upload" size={20} color={colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity testID="add-song-btn" style={styles.addButton} onPress={() => router.push('/song/new')}>
@@ -427,11 +426,11 @@ export default function SongsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  headerActions: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-  title: { fontSize: 28, fontWeight: '700', color: colors.text },
-  addButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
-  importButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.sm },
+  headerActions: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center', flexShrink: 0 },
+  title: { fontSize: 24, fontWeight: '700', color: colors.text, flex: 1, flexShrink: 1 },
+  addButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
+  importButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.primary },
   viewToggleBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surfaceLight, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.border },
   // Compact list view
   listContainer: { backgroundColor: colors.surface, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: colors.border },
@@ -443,7 +442,7 @@ const styles = StyleSheet.create({
   listRowRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   listStatusBadge: { transform: [{ scale: 0.85 }], marginRight: 2 },
   listIconBtn: { padding: 6, borderRadius: 8 },
-  quickAddButton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: spacing.sm, height: 44, borderRadius: 22, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary },
+  quickAddButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primary + '20', borderWidth: 1, borderColor: colors.primary, justifyContent: 'center', alignItems: 'center' },
   quickAddText: { fontSize: 12, color: colors.primary, fontWeight: '600' },
   searchWrap: { paddingHorizontal: spacing.lg, marginBottom: spacing.sm },
   filterScroll: { maxHeight: 44, marginBottom: spacing.xs },

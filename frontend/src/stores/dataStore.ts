@@ -84,9 +84,9 @@ export const useDataStore = create<DataState>((set, get) => ({
       const qs = params.toString();
       const res = await authFetch(`${API_URL}/api/artists${qs ? '?' + qs : ''}`);
       const data = await res.json();
-      set({ artists: data, isLoading: false });
+      set({ artists: Array.isArray(data) ? data : [], isLoading: false });
     } catch {
-      set({ isLoading: false });
+      set({ artists: [], isLoading: false });
     }
   },
 
@@ -131,9 +131,9 @@ export const useDataStore = create<DataState>((set, get) => ({
       
       const res = await authFetch(`${API_URL}/api/songs${qs ? '?' + qs : ''}`);
       const data = await res.json();
-      set({ songs: data, isLoading: false });
+      set({ songs: Array.isArray(data) ? data : [], isLoading: false });
     } catch {
-      set({ isLoading: false });
+      set({ songs: [], isLoading: false });
     }
   },
 
