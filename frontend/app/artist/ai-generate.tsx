@@ -64,6 +64,26 @@ export default function AIGenerateArtistScreen() {
     setGenres(genres.includes(g) ? genres.filter(x => x !== g) : [...genres, g]);
   };
 
+  const aiErrorMessage = (status: number, detail: string) => {
+    const lower = (detail || '').toLowerCase();
+    const isBudget =
+      lower.includes('budget') ||
+      lower.includes('credit') ||
+      lower.includes('quota') ||
+      lower.includes('insufficient') ||
+      lower.includes('exhausted') ||
+      lower.includes('rate limit') ||
+      lower.includes('429');
+    if (isBudget) {
+      return {
+        title: 'AI Credits Exhausted',
+        message: 'Your Emergent LLM key has run out of credits. Top up your key from your Emergent profile (Universal Key) and try again.',
+      };
+    }
+    if (status === 503) return { title: 'AI Not Configured', message: 'The AI service is not set up. Please contact support.' };
+    return { title: 'Generation Failed', message: detail || 'AI generation failed. Please try again.' };
+  };
+
   const handleGenerate = async () => {
     if (influences.length === 0 && !customPrompt.trim()) {
       Alert.alert('Add influences', 'Add at least one real-life influence (e.g., Travis Scott) or a custom direction.');
@@ -78,13 +98,15 @@ export default function AIGenerateArtistScreen() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Generation failed');
+        const { title, message } = aiErrorMessage(res.status, err.detail);
+        Alert.alert(title, message);
+        return;
       }
       const data = await res.json();
       setResult(data);
       setEditName(data.primary_name || (data.name_suggestions?.[0]) || '');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'AI generation failed');
+      Alert.alert('Network Error', 'Could not reach the AI service. Check your connection and try again.');
     } finally {
       setGenerating(false);
     }
@@ -133,7 +155,9 @@ export default function AIGenerateArtistScreen() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || 'Refinement failed');
+        const { title, message } = aiErrorMessage(res.status, err.detail);
+        Alert.alert(title, message);
+        return;
       }
       const refined = await res.json();
       setResult(refined);
@@ -143,7 +167,7 @@ export default function AIGenerateArtistScreen() {
         setEditName(refined.primary_name || refined.name_suggestions?.[0]);
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Refinement failed');
+      Alert.alert('Network Error', 'Could not reach the AI service. Check your connection and try again.');
     } finally {
       setRefining(false);
     }
