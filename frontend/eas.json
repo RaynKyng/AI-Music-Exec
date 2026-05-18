@@ -25,7 +25,8 @@
         "buildType": "apk"
       },
       "env": {
-        "ENVIRONMENT": "preview"
+        "ENVIRONMENT": "preview",
+        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.preview.emergentagent.com"
       }
     },
     "production": {
@@ -35,7 +36,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "ENVIRONMENT": "production"
+        "ENVIRONMENT": "production",
+        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.preview.emergentagent.com"
       }
     }
   },
