@@ -139,6 +139,12 @@ export default function Index() {
               <Text style={styles.featureText}>AI Analysis</Text>
             </View>
           </View>
+
+          {/* Debug footer — shows the API URL the APK has baked in.
+              Helps diagnose "404 page not found" errors caused by a missing/wrong env var. */}
+          <Text style={styles.debugFooter} numberOfLines={2}>
+            API: {process.env.EXPO_PUBLIC_BACKEND_URL || '⚠️ NOT SET — rebuild APK with eas.json env var'}
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -211,5 +217,13 @@ const styles = StyleSheet.create({
   featureText: {
     color: colors.textSecondary,
     fontSize: 12,
+  },
+  debugFooter: {
+    marginTop: spacing.lg,
+    fontSize: 10,
+    color: colors.textMuted,
+    textAlign: 'center',
+    opacity: 0.5,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
 });
