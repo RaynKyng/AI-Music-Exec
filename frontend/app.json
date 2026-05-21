@@ -76,11 +76,20 @@
     "experiments": {
       "typedRoutes": true
     },
+    "updates": {
+      "url": "https://u.expo.dev/9d68f3eb-004f-42e5-9c6e-cff6d244aaf7",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_YOUR_EAS_PROJECT_ID"
+        "projectId": "9d68f3eb-004f-42e5-9c6e-cff6d244aaf7"
       }
     },
-    "owner": "REPLACE_WITH_YOUR_EXPO_USERNAME"
+    "owner": "raynkyng"
   }
 }
