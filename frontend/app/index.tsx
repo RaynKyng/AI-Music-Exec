@@ -18,6 +18,8 @@ import { Button } from '../src/components/Button';
 import { LoadingSpinner } from '../src/components/LoadingSpinner';
 import { colors, spacing } from '../src/utils/theme';
 
+const API_URL_DEBUG = process.env.EXPO_PUBLIC_BACKEND_URL;
+
 export default function Index() {
   const router = useRouter();
   const { isAuthenticated, isLoading, login, register } = useAuthStore();
@@ -49,9 +51,35 @@ export default function Index() {
       }
       router.replace('/(tabs)');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Authentication failed');
+      Alert.alert('Sign-in failed', error.message || 'Authentication failed');
     } finally {
+      // Guarantee the spinner stops even if router.replace() throws or
+      // the auth promise rejects in some unexpected way.
       setLoading(false);
+    }
+  };
+
+  // One-tap connectivity test. Lets the user quickly verify the APK can
+  // reach the backend without typing credentials. Fires a 10s-timeout
+  // request to the OPTIONS preflight of /api/auth/login (lightweight, no auth).
+  const handleTestConnection = async () => {
+    if (!API_URL_DEBUG) {
+      Alert.alert('No API URL', 'EXPO_PUBLIC_BACKEND_URL is not baked into this build. Rebuild the APK after setting it in eas.json.');
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    try {
+      const r = await fetch(`${API_URL_DEBUG}/api/auth/login`, {
+        method: 'OPTIONS',
+        signal: controller.signal,
+      });
+      Alert.alert('Connection OK', `Reached ${API_URL_DEBUG}\nStatus: ${r.status}`);
+    } catch (e: any) {
+      const msg = e?.name === 'AbortError' ? 'Request timed out after 10s' : (e?.message || String(e));
+      Alert.alert('Connection failed', `${API_URL_DEBUG}\n${msg}`);
+    } finally {
+      clearTimeout(timer);
     }
   };
 
@@ -141,10 +169,14 @@ export default function Index() {
           </View>
 
           {/* Debug footer — shows the API URL the APK has baked in.
-              Helps diagnose "404 page not found" errors caused by a missing/wrong env var. */}
-          <Text style={styles.debugFooter} numberOfLines={2}>
-            API: {process.env.EXPO_PUBLIC_BACKEND_URL || '⚠️ NOT SET — rebuild APK with eas.json env var'}
-          </Text>
+              Tap to run a quick connectivity test against the backend.
+              Helps diagnose hung logins or "404 page not found" errors. */}
+          <TouchableOpacity onPress={handleTestConnection} activeOpacity={0.7}>
+            <Text style={styles.debugFooter} numberOfLines={2}>
+              API: {API_URL_DEBUG || '⚠️ NOT SET — rebuild APK with eas.json env var'}
+            </Text>
+            <Text style={styles.debugFooterHint}>Tap to test connection</Text>
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -225,5 +257,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.5,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  debugFooterHint: {
+    marginTop: 2,
+    fontSize: 9,
+    color: colors.primary,
+    textAlign: 'center',
+    opacity: 0.6,
+    textDecorationLine: 'underline',
   },
 });

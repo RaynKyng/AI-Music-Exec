@@ -16,6 +16,38 @@ if (!API_URL) {
   );
 }
 
+// Default timeout for auth requests. The Emergent backend container can cold-start
+// after idle which adds latency; 20 seconds covers that. Anything longer than this
+// is almost certainly a network/firewall problem on the device side, so we'd
+// rather surface a clear error than spin forever.
+const AUTH_TIMEOUT_MS = 20000;
+
+// fetch + AbortController + timeout. Distinguishes between timeout, abort and
+// generic network failure so the user gets an actionable error.
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = AUTH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    // eslint-disable-next-line no-console
+    console.log('[authStore] fetch ->', url);
+    const res = await fetch(url, { ...init, signal: controller.signal });
+    // eslint-disable-next-line no-console
+    console.log('[authStore] fetch <-', url, res.status);
+    return res;
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(
+        `Request timed out after ${Math.round(timeoutMs / 1000)}s contacting ${url}. Check your internet connection, VPN, or whether the backend is reachable.`
+      );
+    }
+    // RN's fetch wraps network errors as TypeError: Network request failed
+    const msg = err?.message || String(err);
+    throw new Error(`Network error contacting ${url}: ${msg}`);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 // Parses an API response body safely. If the response is JSON, returns the
 // parsed object. If it's HTML/text (e.g. an upstream proxy 404 page) returns
 // a clear, debuggable error string that includes the URL and status so the
@@ -60,7 +92,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
     }
     const url = `${API_URL}/api/auth/login`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -83,7 +115,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
     }
     const url = `${API_URL}/api/auth/register`;
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, name }),
@@ -134,8 +166,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshUser: async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      if (!token) return;
-      const res = await fetch(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!token || !API_URL) return;
+      const res = await fetchWithTimeout(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const user = await res.json();
         await AsyncStorage.setItem('user', JSON.stringify(user));
