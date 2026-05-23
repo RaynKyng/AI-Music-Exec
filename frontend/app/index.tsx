@@ -60,23 +60,29 @@ export default function Index() {
   };
 
   // One-tap connectivity test. Lets the user quickly verify the APK can
-  // reach the backend without typing credentials. Fires a 10s-timeout
-  // request to the OPTIONS preflight of /api/auth/login (lightweight, no auth).
+  // reach the backend without typing credentials. The Emergent Starter-tier
+  // deployment may need 30-60s to wake up from idle on the first request,
+  // so allow up to 75s before declaring failure.
   const handleTestConnection = async () => {
     if (!API_URL_DEBUG) {
       Alert.alert('No API URL', 'EXPO_PUBLIC_BACKEND_URL is not baked into this build. Rebuild the APK after setting it in eas.json.');
       return;
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 75000);
     try {
-      const r = await fetch(`${API_URL_DEBUG}/api/auth/login`, {
-        method: 'OPTIONS',
+      const t0 = Date.now();
+      const r = await fetch(`${API_URL_DEBUG}/api/`, {
+        method: 'GET',
         signal: controller.signal,
       });
-      Alert.alert('Connection OK', `Reached ${API_URL_DEBUG}\nStatus: ${r.status}`);
+      const dt = Date.now() - t0;
+      Alert.alert(
+        'Connection OK',
+        `Reached ${API_URL_DEBUG}\nStatus: ${r.status}\nLatency: ${dt}ms${dt > 5000 ? '\n(backend warmed up from cold-start)' : ''}`
+      );
     } catch (e: any) {
-      const msg = e?.name === 'AbortError' ? 'Request timed out after 10s' : (e?.message || String(e));
+      const msg = e?.name === 'AbortError' ? 'Request timed out after 75s — backend may be down' : (e?.message || String(e));
       Alert.alert('Connection failed', `${API_URL_DEBUG}\n${msg}`);
     } finally {
       clearTimeout(timer);

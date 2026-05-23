@@ -26,7 +26,7 @@
       },
       "env": {
         "ENVIRONMENT": "preview",
-        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.preview.emergentagent.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.emergent.host"
       }
     },
     "production": {
@@ -37,7 +37,7 @@
       },
       "env": {
         "ENVIRONMENT": "production",
-        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.preview.emergentagent.com"
+        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.emergent.host"
       }
     }
   },

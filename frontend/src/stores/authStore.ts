@@ -16,11 +16,11 @@ if (!API_URL) {
   );
 }
 
-// Default timeout for auth requests. The Emergent backend container can cold-start
-// after idle which adds latency; 20 seconds covers that. Anything longer than this
-// is almost certainly a network/firewall problem on the device side, so we'd
-// rather surface a clear error than spin forever.
-const AUTH_TIMEOUT_MS = 20000;
+// Default timeout for auth requests. The Emergent Starter-tier deployment scales
+// pods to zero on idle and has a documented cold-start of 30-60s on the next
+// request. 75 seconds covers that worst case so a sleepy backend doesn't
+// surface as a hung login. Subsequent requests after warmup are <1s.
+const AUTH_TIMEOUT_MS = 75000;
 
 // fetch + AbortController + timeout. Distinguishes between timeout, abort and
 // generic network failure so the user gets an actionable error.
