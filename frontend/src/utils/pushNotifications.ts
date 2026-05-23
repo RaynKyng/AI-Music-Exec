@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useAuthStore } from '../stores/authStore';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 // Set up the notification handler globally (foreground behavior)
 Notifications.setNotificationHandler({

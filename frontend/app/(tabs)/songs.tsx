@@ -17,7 +17,7 @@ import { colors, spacing } from '../../src/utils/theme';
 import { confirmDestructive } from '../../src/utils/confirm';
 import { Song } from '../../src/types';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 const STATUS_FILTERS = ['all', 'draft', 'in_progress', 'final', 'released'];
 
 // Authorship: original / ai_generated / collab / cover (cover may be a future value)

@@ -15,7 +15,7 @@ import { useDataStore } from '../../src/stores/dataStore';
 import { colors, spacing } from '../../src/utils/theme';
 import { confirmDestructive } from '../../src/utils/confirm';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
 
 export default function CollectionsScreen() {

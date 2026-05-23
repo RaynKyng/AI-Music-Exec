@@ -13,7 +13,7 @@ import { Card } from '../src/components/Card';
 import { Button } from '../src/components/Button';
 import { colors, spacing } from '../src/utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 export default function TeamScreen() {
   const router = useRouter();

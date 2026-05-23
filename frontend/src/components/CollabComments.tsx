@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, spacing } from '../utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 const COMMENT_TYPES = [
   { id: 'note', label: 'Note', icon: 'document-text', color: colors.textSecondary },
   { id: 'visual_suggestion', label: 'Visual', icon: 'color-palette', color: '#EC4899' },

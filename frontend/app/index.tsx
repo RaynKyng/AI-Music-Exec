@@ -18,7 +18,7 @@ import { Button } from '../src/components/Button';
 import { LoadingSpinner } from '../src/components/LoadingSpinner';
 import { colors, spacing } from '../src/utils/theme';
 
-const API_URL_DEBUG = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL_DEBUG = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 export default function Index() {
   const router = useRouter();

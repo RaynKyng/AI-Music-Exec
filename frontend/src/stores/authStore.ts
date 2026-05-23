@@ -2,19 +2,15 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+// Single source of truth for backend URL with hardcoded production fallback.
+// EAS Update doesn't always pick up env vars from eas.json's build profile,
+// so we ship the prod URL as a fallback to guarantee the app always knows
+// where to talk to the backend, no matter how the bundle was produced.
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
-// Helpful guard for native builds where the env var sometimes isn't baked into the
-// JS bundle if it wasn't defined in eas.json's `env` block at build time. If it's
-// missing/empty, every API call would silently go to "undefined/api/..." which
-// produces confusing "404 page not found" errors from upstream proxies. Surface
-// it loudly instead so the user knows to rebuild with the env var set.
-if (!API_URL) {
-  // eslint-disable-next-line no-console
-  console.warn(
-    '[authStore] EXPO_PUBLIC_BACKEND_URL is undefined. Rebuild the APK with the env var defined in eas.json under the matching profile (preview/production).'
-  );
-}
+// Helpful info log so we can see the actual URL in adb logcat / Metro logs.
+// eslint-disable-next-line no-console
+console.log('[authStore] API_URL =', API_URL);
 
 // Default timeout for auth requests. The Emergent Starter-tier deployment scales
 // pods to zero on idle and has a documented cold-start of 30-60s on the next

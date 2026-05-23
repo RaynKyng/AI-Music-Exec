@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Card } from '../../../src/components/Card';
 import { colors, spacing } from '../../../src/utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 export default function ArtistBriefScreen() {
   const router = useRouter();

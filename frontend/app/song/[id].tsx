@@ -90,7 +90,7 @@ export default function SongDetailScreen() {
   const loadCollections = async () => {
     try {
       const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/collections`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/collections`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
@@ -101,7 +101,7 @@ export default function SongDetailScreen() {
   const loadSong = async () => {
     try {
       const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${id}`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/songs/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -621,7 +621,7 @@ export default function SongDetailScreen() {
                         const url = gen.audio_url || gen.suno_url;
                         if (url) {
                           // Resolve relative /api/audio/ paths
-                          const fullUrl = url.startsWith('/api/') ? `${process.env.EXPO_PUBLIC_BACKEND_URL}${url}` : url;
+                          const fullUrl = url.startsWith('/api/') ? `${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}${url}` : url;
                           usePlayerStore.getState().play({
                             id: gen.id || `${id}-gen-${i}`,
                             url: fullUrl,
@@ -712,7 +712,7 @@ export default function SongDetailScreen() {
                             { text: 'Delete', style: 'destructive', onPress: async () => {
                               try {
                                 const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-                                await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${id}/saved-prompts/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                                await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/songs/${id}/saved-prompts/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
                                 setForm({ ...form, saved_prompts: form.saved_prompts.filter((x: any) => x.id !== p.id) });
                               } catch {}
                             }}
@@ -928,7 +928,7 @@ function ActivityTimelineCard({ songId }: { songId: string }) {
     (async () => {
       try {
         const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-        const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${songId}/activity`, {
+        const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/songs/${songId}/activity`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) setActivities(await res.json());
@@ -1000,7 +1000,7 @@ function ReanalyzeModal({ songId, onClose, onDone }: { songId: string; onClose: 
     setRunning(true);
     try {
       const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${songId}/re-analyze`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/songs/${songId}/re-analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ custom_prompt: customPrompt, focus }),
@@ -1113,7 +1113,7 @@ function SunoGenModal({ visible, onClose, onSave }: { visible: boolean; onClose:
         formData.append('file', { uri: asset.uri, name: asset.name || 'audio.mp3', type: asset.mimeType || 'audio/mpeg' } as any);
       }
       const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/upload/audio`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/upload/audio`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,

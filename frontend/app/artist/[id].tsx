@@ -72,7 +72,7 @@ export default function ArtistDetailScreen() {
   const loadArtist = async () => {
     try {
       const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/artists/${id}`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/artists/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { setLoading(false); return; }
@@ -340,7 +340,7 @@ export default function ArtistDetailScreen() {
                           { text: 'Delete', style: 'destructive', onPress: async () => {
                             try {
                               const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-                              await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/artists/${id}/saved-prompts/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                              await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/artists/${id}/saved-prompts/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
                               setSavedPrompts(savedPrompts.filter((x: any) => x.id !== p.id));
                             } catch {}
                           }}

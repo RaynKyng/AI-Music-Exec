@@ -10,7 +10,7 @@ import { useDataStore } from '../src/stores/dataStore';
 import { usePlayerStore, Track } from '../src/stores/playerStore';
 import { colors, spacing } from '../src/utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 const isPlayableUrl = (url: string) => {
   if (!url) return false;

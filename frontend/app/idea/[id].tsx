@@ -55,7 +55,7 @@ export default function IdeaDetailScreen() {
   const loadIdea = async () => {
     try {
       const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/ideas/${id}`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/ideas/${id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) { setLoading(false); return; }

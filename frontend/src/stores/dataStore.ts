@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Artist, Song, Idea, Distribution, DashboardStats, SunoGeneration, SharingFormats } from '../types';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 const getToken = async () => {
   return await AsyncStorage.getItem('token');

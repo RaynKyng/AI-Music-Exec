@@ -65,7 +65,7 @@ export default function AIToolsScreen() {
     }
     try {
       const token = await AsyncStorage.getItem('token');
-      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/songs/${saveSongId}/saved-prompts`, {
+      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/songs/${saveSongId}/saved-prompts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ prompt_type: promptType, label, content }),
@@ -439,7 +439,7 @@ export default function AIToolsScreen() {
                 setVideoResult('');
                 try {
                   const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-                  const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/api/ai/video-prompts`, {
+                  const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/ai/video-prompts`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                     body: JSON.stringify({ lyrics: videoLyrics, style: videoStyle, artist_id: videoArtist, platforms: ['youtube', 'tiktok', 'instagram'] }),

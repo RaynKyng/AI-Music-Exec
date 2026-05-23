@@ -11,7 +11,7 @@ import * as Clipboard from 'expo-clipboard';
 import { colors, spacing } from '../../../src/utils/theme';
 import { safeGoBack } from '../../../src/utils/nav';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 type Message = {
   role: 'user' | 'assistant';

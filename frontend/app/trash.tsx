@@ -11,7 +11,7 @@ import { useDataStore } from '../src/stores/dataStore';
 import { colors, spacing } from '../src/utils/theme';
 import { confirmDestructive, confirmAction } from '../src/utils/confirm';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 export default function TrashScreen() {
   const router = useRouter();

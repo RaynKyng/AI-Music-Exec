@@ -12,7 +12,7 @@ import { Card } from '../../src/components/Card';
 import { TeamActivityFeed } from '../../src/components/TeamActivityFeed';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 export default function Dashboard() {
   const router = useRouter();

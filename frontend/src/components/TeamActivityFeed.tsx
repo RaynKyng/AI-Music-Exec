@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { Card } from './Card';
 import { colors, spacing } from '../utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 type Activity = {
   id: string;

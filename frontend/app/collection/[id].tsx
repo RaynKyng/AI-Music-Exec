@@ -17,7 +17,7 @@ import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
 import { safeGoBack } from '../../src/utils/nav';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
 const STATUS_OPTS = ['in_progress', 'completed', 'released'];
 
@@ -317,7 +317,7 @@ export default function CollectionDetailScreen() {
                       const playable = tracks.map((s, idx) => {
                         const url = s.suno_generations?.[0]?.audio_url || s.suno_generations?.[0]?.suno_url || s.versions?.find((v: any) => v.audio_url || v.suno_link)?.audio_url || s.versions?.find((v: any) => v.audio_url || v.suno_link)?.suno_link;
                         if (!url) return null;
-                        const fullUrl = url.startsWith('/api/') ? `${process.env.EXPO_PUBLIC_BACKEND_URL}${url}` : url;
+                        const fullUrl = url.startsWith('/api/') ? `${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}${url}` : url;
                         return {
                           id: `${s.id}-tracklist`,
                           url: fullUrl,

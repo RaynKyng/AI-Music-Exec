@@ -13,7 +13,7 @@ import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { colors, spacing } from '../../src/utils/theme';
 
-const API_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 
 const PRESET_GENRES = ['hip-hop', 'trap', 'r&b', 'pop', 'rock', 'indie', 'electronic', 'lo-fi', 'emo rap', 'drill', 'afrobeats', 'dancehall', 'country'];
 const PRESET_VIBES = ['moody & introspective', 'energetic & playful', 'dark & cinematic', 'romantic & smooth', 'rebellious & raw', 'dreamy & ethereal'];
