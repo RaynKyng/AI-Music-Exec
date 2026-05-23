@@ -175,13 +175,17 @@ export default function Index() {
           </View>
 
           {/* Debug footer — shows the API URL the APK has baked in.
-              Tap to run a quick connectivity test against the backend.
-              Helps diagnose hung logins or "404 page not found" errors. */}
-          <TouchableOpacity onPress={handleTestConnection} activeOpacity={0.7}>
+              Tap to run a quick connectivity test against the backend. */}
+          <TouchableOpacity
+            onPress={() => { console.log('[login] test connection tapped'); handleTestConnection(); }}
+            activeOpacity={0.6}
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            style={styles.debugFooterTouch}
+          >
             <Text style={styles.debugFooter} numberOfLines={2}>
               API: {API_URL_DEBUG || '⚠️ NOT SET — rebuild APK with eas.json env var'}
             </Text>
-            <Text style={styles.debugFooterHint}>Tap to test connection</Text>
+            <Text style={styles.debugFooterHint}>👉 Tap here to test connection</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -257,19 +261,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   debugFooter: {
-    marginTop: spacing.lg,
-    fontSize: 10,
+    marginTop: 0,
+    fontSize: 11,
     color: colors.textMuted,
     textAlign: 'center',
-    opacity: 0.5,
+    opacity: 0.7,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   debugFooterHint: {
-    marginTop: 2,
-    fontSize: 9,
+    marginTop: 6,
+    fontSize: 13,
     color: colors.primary,
     textAlign: 'center',
-    opacity: 0.6,
     textDecorationLine: 'underline',
+    fontWeight: '600',
+  },
+  debugFooterTouch: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
   },
 });

@@ -22,25 +22,37 @@ if (!API_URL) {
 // surface as a hung login. Subsequent requests after warmup are <1s.
 const AUTH_TIMEOUT_MS = 75000;
 
-// fetch + AbortController + timeout. Distinguishes between timeout, abort and
-// generic network failure so the user gets an actionable error.
+// fetch + AbortController + timeout. Uses Promise.race as a belt-and-suspenders
+// guard because React Native's fetch has had historical bugs where it ignores
+// the AbortController.signal — Promise.race guarantees the user-facing promise
+// resolves (with rejection) after timeoutMs no matter what the underlying
+// fetch decides to do.
 async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = AUTH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  let timeoutId: any;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      try { controller.abort(); } catch {}
+      reject(new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s contacting ${url}. Check your internet connection, VPN, or whether the backend is reachable.`));
+    }, timeoutMs);
+  });
   try {
     // eslint-disable-next-line no-console
     console.log('[authStore] fetch ->', url);
-    const res = await fetch(url, { ...init, signal: controller.signal });
+    const res = await Promise.race([
+      fetch(url, { ...init, signal: controller.signal }),
+      timeoutPromise,
+    ]) as Response;
     // eslint-disable-next-line no-console
     console.log('[authStore] fetch <-', url, res.status);
     return res;
   } catch (err: any) {
+    if (err?.message?.includes('timed out')) throw err;
     if (err?.name === 'AbortError') {
       throw new Error(
         `Request timed out after ${Math.round(timeoutMs / 1000)}s contacting ${url}. Check your internet connection, VPN, or whether the backend is reachable.`
       );
     }
-    // RN's fetch wraps network errors as TypeError: Network request failed
     const msg = err?.message || String(err);
     throw new Error(`Network error contacting ${url}: ${msg}`);
   } finally {
