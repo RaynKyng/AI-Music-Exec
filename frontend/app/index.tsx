@@ -59,6 +59,10 @@ export default function Index() {
     }
   };
 
+  // Browser-like UA to bypass Cloudflare bot management which silently drops
+  // requests from RN's default OkHttp `okhttp/4.x` UA.
+  const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
   // Helper for the diagnostic — fires a fetch with Promise.race timeout
   // against a single URL and returns a short summary string.
   const probeOne = async (url: string, timeoutMs = 30000): Promise<string> => {
@@ -73,7 +77,11 @@ export default function Index() {
     const t0 = Date.now();
     try {
       const r = await Promise.race([
-        fetch(url, { method: 'GET', signal: controller.signal }),
+        fetch(url, {
+          method: 'GET',
+          headers: { 'User-Agent': BROWSER_UA },
+          signal: controller.signal,
+        }),
         timeoutPromise,
       ]) as Response;
       return `✅ ${r.status} in ${Date.now() - t0}ms`;

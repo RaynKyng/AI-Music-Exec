@@ -8,10 +8,16 @@ const getToken = async () => {
   return await AsyncStorage.getItem('token');
 };
 
+// Browser-like UA to bypass Cloudflare bot management which silently drops
+// requests from RN's default OkHttp `okhttp/4.x` UA. Without this every
+// API call from the Android APK hangs until timeout.
+const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
 const authFetch = async (url: string, options: RequestInit = {}) => {
   const token = await getToken();
   const headers = {
     'Content-Type': 'application/json',
+    'User-Agent': BROWSER_UA,
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };

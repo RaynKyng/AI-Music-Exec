@@ -12,16 +12,25 @@
 
 type FetchOpts = RequestInit & { retries?: number; retryDelayMs?: number };
 
+// Browser-like UA to bypass Cloudflare bot management which silently drops
+// requests from RN's default OkHttp `okhttp/4.x` UA on Android.
+const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
 export async function resilientFetch(
   input: RequestInfo | URL,
   init: FetchOpts = {}
 ): Promise<Response> {
-  const { retries = 3, retryDelayMs = 1000, ...rest } = init;
+  const { retries = 3, retryDelayMs = 1000, headers: userHeaders, ...rest } = init;
   let lastErr: any = null;
+
+  const mergedHeaders = {
+    'User-Agent': BROWSER_UA,
+    ...(userHeaders || {}),
+  };
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const res = await fetch(input, rest);
+      const res = await fetch(input, { ...rest, headers: mergedHeaders });
 
       // Detect "backend waking up" HTML responses
       const ctype = res.headers.get('content-type') || '';

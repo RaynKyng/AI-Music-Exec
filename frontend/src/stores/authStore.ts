@@ -18,6 +18,12 @@ console.log('[authStore] API_URL =', API_URL);
 // surface as a hung login. Subsequent requests after warmup are <1s.
 const AUTH_TIMEOUT_MS = 75000;
 
+// Browser-like User-Agent. Cloudflare's bot management silently drops
+// requests from OkHttp's default `okhttp/4.x` UA, which is what RN's fetch
+// uses under the hood on Android. Sending a Chrome-like UA makes our
+// requests look like a normal mobile browser and gets us through.
+const BROWSER_UA = 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+
 // fetch + AbortController + timeout. Uses Promise.race as a belt-and-suspenders
 // guard because React Native's fetch has had historical bugs where it ignores
 // the AbortController.signal — Promise.race guarantees the user-facing promise
@@ -35,8 +41,12 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
   try {
     // eslint-disable-next-line no-console
     console.log('[authStore] fetch ->', url);
+    const mergedHeaders = {
+      'User-Agent': BROWSER_UA,
+      ...(init.headers || {}),
+    };
     const res = await Promise.race([
-      fetch(url, { ...init, signal: controller.signal }),
+      fetch(url, { ...init, headers: mergedHeaders, signal: controller.signal }),
       timeoutPromise,
     ]) as Response;
     // eslint-disable-next-line no-console
