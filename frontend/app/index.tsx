@@ -60,30 +60,41 @@ export default function Index() {
   };
 
   // One-tap connectivity test. Lets the user quickly verify the APK can
-  // reach the backend without typing credentials. The Emergent Starter-tier
-  // deployment may need 30-60s to wake up from idle on the first request,
-  // so allow up to 75s before declaring failure.
+  // reach the backend without typing credentials. Uses Promise.race to
+  // guarantee the timeout fires even if React Native's fetch ignores the
+  // AbortController.signal (which has been a long-standing RN bug).
   const handleTestConnection = async () => {
     if (!API_URL_DEBUG) {
-      Alert.alert('No API URL', 'EXPO_PUBLIC_BACKEND_URL is not baked into this build. Rebuild the APK after setting it in eas.json.');
+      Alert.alert('No API URL', 'EXPO_PUBLIC_BACKEND_URL is not baked into this build and no fallback was compiled in.');
       return;
     }
+    const TIMEOUT_MS = 75000;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 75000);
+    let timer: any;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        try { controller.abort(); } catch {}
+        reject(new Error(`Request timed out after ${TIMEOUT_MS / 1000}s — backend may be down or unreachable`));
+      }, TIMEOUT_MS);
+    });
+    const t0 = Date.now();
     try {
-      const t0 = Date.now();
-      const r = await fetch(`${API_URL_DEBUG}/api/`, {
-        method: 'GET',
-        signal: controller.signal,
-      });
+      const r = await Promise.race([
+        fetch(`${API_URL_DEBUG}/api/`, {
+          method: 'GET',
+          signal: controller.signal,
+        }),
+        timeoutPromise,
+      ]) as Response;
       const dt = Date.now() - t0;
       Alert.alert(
         'Connection OK',
         `Reached ${API_URL_DEBUG}\nStatus: ${r.status}\nLatency: ${dt}ms${dt > 5000 ? '\n(backend warmed up from cold-start)' : ''}`
       );
     } catch (e: any) {
-      const msg = e?.name === 'AbortError' ? 'Request timed out after 75s — backend may be down' : (e?.message || String(e));
-      Alert.alert('Connection failed', `${API_URL_DEBUG}\n${msg}`);
+      const dt = Date.now() - t0;
+      const msg = (e?.message || String(e)).slice(0, 200);
+      Alert.alert('Connection failed', `${API_URL_DEBUG}\nAfter ${dt}ms\n${msg}`);
     } finally {
       clearTimeout(timer);
     }
