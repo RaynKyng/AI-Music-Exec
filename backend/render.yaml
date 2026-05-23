@@ -1,0 +1,36 @@
+# Render.com Blueprint — auto-deploys the AI Music Manager backend.
+# Drop this file in your repo root or anywhere in the repo and connect Render
+# to your GitHub repo. Render auto-detects this file and creates the service.
+#
+# Free tier notes:
+#  - 512 MB RAM, shared CPU, US-Oregon region
+#  - Sleeps after 15 min of no traffic; wakes in ~30s on next request
+#  - Always-on (no sleep) requires the $7/mo Starter tier
+#
+# After deploy, set the secrets in the Render dashboard:
+#   MONGO_URL          — full MongoDB Atlas connection string
+#   DB_NAME            — music_artist_manager
+#   JWT_SECRET         — any long random string
+#   EMERGENT_LLM_KEY   — your existing Emergent LLM key
+
+services:
+  - type: web
+    name: ai-music-exec-backend
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MONGO_URL
+        sync: false   # set in dashboard
+      - key: DB_NAME
+        value: music_artist_manager
+      - key: JWT_SECRET
+        sync: false   # set in dashboard
+      - key: EMERGENT_LLM_KEY
+        sync: false   # set in dashboard
