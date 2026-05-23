@@ -59,45 +59,52 @@ export default function Index() {
     }
   };
 
-  // One-tap connectivity test. Lets the user quickly verify the APK can
-  // reach the backend without typing credentials. Uses Promise.race to
-  // guarantee the timeout fires even if React Native's fetch ignores the
-  // AbortController.signal (which has been a long-standing RN bug).
-  const handleTestConnection = async () => {
-    if (!API_URL_DEBUG) {
-      Alert.alert('No API URL', 'EXPO_PUBLIC_BACKEND_URL is not baked into this build and no fallback was compiled in.');
-      return;
-    }
-    const TIMEOUT_MS = 75000;
+  // Helper for the diagnostic — fires a fetch with Promise.race timeout
+  // against a single URL and returns a short summary string.
+  const probeOne = async (url: string, timeoutMs = 30000): Promise<string> => {
     const controller = new AbortController();
     let timer: any;
     const timeoutPromise = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
         try { controller.abort(); } catch {}
-        reject(new Error(`Request timed out after ${TIMEOUT_MS / 1000}s — backend may be down or unreachable`));
-      }, TIMEOUT_MS);
+        reject(new Error(`timeout ${timeoutMs / 1000}s`));
+      }, timeoutMs);
     });
     const t0 = Date.now();
     try {
       const r = await Promise.race([
-        fetch(`${API_URL_DEBUG}/api/`, {
-          method: 'GET',
-          signal: controller.signal,
-        }),
+        fetch(url, { method: 'GET', signal: controller.signal }),
         timeoutPromise,
       ]) as Response;
-      const dt = Date.now() - t0;
-      Alert.alert(
-        'Connection OK',
-        `Reached ${API_URL_DEBUG}\nStatus: ${r.status}\nLatency: ${dt}ms${dt > 5000 ? '\n(backend warmed up from cold-start)' : ''}`
-      );
+      return `✅ ${r.status} in ${Date.now() - t0}ms`;
     } catch (e: any) {
-      const dt = Date.now() - t0;
-      const msg = (e?.message || String(e)).slice(0, 200);
-      Alert.alert('Connection failed', `${API_URL_DEBUG}\nAfter ${dt}ms\n${msg}`);
+      return `❌ ${(e?.message || String(e)).slice(0, 60)} after ${Date.now() - t0}ms`;
     } finally {
       clearTimeout(timer);
     }
+  };
+
+  // One-tap connectivity test. Probes BOTH the production backend AND a
+  // known-working public endpoint (httpbin.org) at the same time. If httpbin
+  // works but the backend doesn't, the APK's fetch is fine — something in
+  // Cloudflare/emergent.host is blocking it. If neither works, the APK
+  // itself can't make outbound HTTPS requests (Android network policy bug).
+  const handleTestConnection = async () => {
+    if (!API_URL_DEBUG) {
+      Alert.alert('No API URL', 'EXPO_PUBLIC_BACKEND_URL is not baked into this build.');
+      return;
+    }
+    const [backendResult, controlResult] = await Promise.all([
+      probeOne(`${API_URL_DEBUG}/api/`, 30000),
+      probeOne('https://httpbin.org/get', 30000),
+    ]);
+    Alert.alert(
+      'Connectivity Test',
+      `BACKEND:\n${API_URL_DEBUG}\n${backendResult}\n\n` +
+      `CONTROL (httpbin):\n${controlResult}\n\n` +
+      `If backend ❌ but control ✅ → backend/Cloudflare problem.\n` +
+      `If both ❌ → APK network config problem.`
+    );
   };
 
   if (isLoading) {
