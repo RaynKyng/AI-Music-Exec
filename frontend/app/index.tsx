@@ -29,12 +29,63 @@ export default function Index() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  // Inline debug output for the "Direct Register Test" button. Stays on
+  // screen so the user can read it without dismissing the alert.
+  const [debugResult, setDebugResult] = useState<string | null>(null);
+  const [debugBusy, setDebugBusy] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
       router.replace('/(tabs)');
     }
   }, [isLoading, isAuthenticated]);
+
+  // === TEMPORARY DIAGNOSTIC ===========================================
+  // Direct Register Test — bypasses authStore entirely. Uses the literal
+  // fetch from the user spec with NO custom headers (no User-Agent, no
+  // Promise.race, no abort signal). This isolates whether a basic Android
+  // POST against the new Render backend works at all. The result is shown
+  // both in an Alert AND as on-screen text so the user can read it
+  // without dismissing.
+  const handleDirectRegister = async () => {
+    setDebugBusy(true);
+    setDebugResult('Sending POST /api/auth/register ...');
+    const url = 'https://ai-music-exec-backend.onrender.com/api/auth/register';
+    // Randomize the email each tap so we don't 409 on repeat presses
+    const debugEmail = `mobiledebug${Date.now()}@example.com`;
+    const t0 = Date.now();
+    try {
+      // eslint-disable-next-line no-console
+      console.log('[direct-register] POST ->', url);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: debugEmail,
+          password: 'password123',
+          name: 'Mobile Debug',
+        }),
+      });
+      const dt = Date.now() - t0;
+      // eslint-disable-next-line no-console
+      console.log('[direct-register] <-', res.status, 'in', dt, 'ms');
+      let bodyText = '';
+      try { bodyText = await res.text(); } catch {}
+      const result = `STATUS: ${res.status}\nLATENCY: ${dt}ms\nEMAIL: ${debugEmail}\nBODY (first 300 chars):\n${bodyText.slice(0, 300)}`;
+      setDebugResult(result);
+      Alert.alert(`Direct Register: ${res.status}`, result);
+    } catch (err: any) {
+      const dt = Date.now() - t0;
+      const errMsg = `ERROR after ${dt}ms\nname: ${err?.name || 'unknown'}\nmessage: ${err?.message || String(err)}\nstack: ${(err?.stack || '').toString().slice(0, 200)}`;
+      // eslint-disable-next-line no-console
+      console.log('[direct-register] FAIL', errMsg);
+      setDebugResult(errMsg);
+      Alert.alert('Direct Register: FAILED', errMsg);
+    } finally {
+      setDebugBusy(false);
+    }
+  };
+  // === END TEMPORARY DIAGNOSTIC ========================================
 
   const handleSubmit = async () => {
     if (!email || !password || (!isLogin && !name)) {
@@ -200,6 +251,36 @@ export default function Index() {
             </View>
           </View>
 
+          {/* === TEMPORARY DIAGNOSTIC BLOCK =====================================
+              Direct Register Test — hits Render directly with NO authStore in the
+              middle. If this works but the real Sign Up doesn't, the bug is in
+              authStore. If both fail with the same error, it's an Android-level
+              POST/network problem. Remove this whole block once Sign Up is fixed.
+          */}
+          <View style={styles.diagBlock}>
+            <TouchableOpacity
+              style={[styles.diagButton, debugBusy && styles.diagButtonBusy]}
+              onPress={handleDirectRegister}
+              disabled={debugBusy}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="bug" size={16} color={colors.text} />
+              <Text style={styles.diagButtonText}>
+                {debugBusy ? 'Testing…' : 'Direct Register Test'}
+              </Text>
+            </TouchableOpacity>
+            {debugResult ? (
+              <ScrollView style={styles.diagResultScroll}>
+                <Text selectable style={styles.diagResultText}>{debugResult}</Text>
+              </ScrollView>
+            ) : (
+              <Text style={styles.diagHint}>
+                Bypasses authStore. Hits Render directly. Result shows here.
+              </Text>
+            )}
+          </View>
+          {/* === END TEMPORARY DIAGNOSTIC BLOCK ================================ */}
+
           {/* Debug footer — shows the API URL the APK has baked in.
               Tap to run a quick connectivity test against the backend. */}
           <TouchableOpacity
@@ -310,4 +391,50 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
     alignItems: 'center',
   },
+  // === TEMPORARY DIAGNOSTIC STYLES ===
+  diagBlock: {
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.warning,
+    backgroundColor: 'rgba(255, 200, 0, 0.06)',
+  },
+  diagButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    borderRadius: 8,
+    backgroundColor: colors.warning,
+  },
+  diagButtonBusy: {
+    opacity: 0.6,
+  },
+  diagButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+  },
+  diagHint: {
+    marginTop: spacing.sm,
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  diagResultScroll: {
+    marginTop: spacing.sm,
+    maxHeight: 220,
+  },
+  diagResultText: {
+    fontSize: 11,
+    color: colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    lineHeight: 16,
+  },
+  // === END TEMPORARY DIAGNOSTIC STYLES ===
 });
