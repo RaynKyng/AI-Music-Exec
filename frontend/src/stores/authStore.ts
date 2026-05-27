@@ -1,16 +1,42 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios, { AxiosError } from 'axios';
 import { User } from '../types';
 
-// Single source of truth for backend URL with hardcoded production fallback.
-// EAS Update doesn't always pick up env vars from eas.json's build profile,
-// so we ship the prod URL as a fallback to guarantee the app always knows
-// where to talk to the backend, no matter how the bundle was produced.
-const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
+// Hardcoded production URL for now. React Native fetch() POST hangs against
+// Render from Android APK builds (confirmed: GET works, POST never reaches
+// backend, times out after 30s, zero entries in Render logs). Axios uses a
+// different underlying HTTP path that works reliably on Android.
+const API_URL = "https://ai-music-exec-backend.onrender.com";
 
-// Helpful info log so we can see the actual URL in adb logcat / Metro logs.
 // eslint-disable-next-line no-console
 console.log('[authStore] API_URL =', API_URL);
+
+// Build a clear, debuggable error string from an axios failure. Surfaces
+// the backend's `detail` field when present, otherwise the network message
+// and status code, so the user knows exactly what went wrong on the device.
+function formatAxiosError(err: any, url: string): string {
+  if (axios.isAxiosError(err)) {
+    const ax = err as AxiosError<any>;
+    const status = ax.response?.status;
+    const detail =
+      (ax.response?.data as any)?.detail ||
+      (ax.response?.data as any)?.message ||
+      null;
+    if (status && detail) return `${detail} (HTTP ${status})`;
+    if (status) {
+      const bodyText = typeof ax.response?.data === 'string'
+        ? ax.response.data.slice(0, 120)
+        : JSON.stringify(ax.response?.data || {}).slice(0, 120);
+      return `Server returned HTTP ${status} from ${url}: ${bodyText}`;
+    }
+    if (ax.code === 'ECONNABORTED') {
+      return `Request timed out contacting ${url}. Backend may be cold-starting — try again in 30s.`;
+    }
+    return `Network error contacting ${url}: ${ax.message}`;
+  }
+  return err?.message || String(err);
+}
 
 // Default timeout for auth requests. The Emergent Starter-tier deployment scales
 // pods to zero on idle and has a documented cold-start of 30-60s on the next
@@ -106,49 +132,49 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   didLogout: false,
 
   login: async (email: string, password: string) => {
-    if (!API_URL) {
-      throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
-    }
     const url = `${API_URL}/api/auth/login`;
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!response.ok) {
-      const msg = await safeReadError(response, url);
-      throw new Error(msg);
+    // eslint-disable-next-line no-console
+    console.log('[authStore] axios POST ->', url);
+    try {
+      const res = await axios.post(
+        url,
+        { email, password },
+        { timeout: 90000, headers: { 'Content-Type': 'application/json' } }
+      );
+      // eslint-disable-next-line no-console
+      console.log('[authStore] axios <-', res.status);
+      const data = res.data;
+      await AsyncStorage.setItem('token', data.access_token);
+      await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.log('[authStore] axios FAIL', err?.code, err?.message, err?.response?.status, err?.response?.data);
+      throw new Error(formatAxiosError(err, url));
     }
-
-    const data = await response.json();
-    await AsyncStorage.setItem('token', data.access_token);
-    await AsyncStorage.setItem('user', JSON.stringify(data.user));
-    
-    set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
   },
 
   register: async (email: string, password: string, name: string) => {
-    if (!API_URL) {
-      throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
-    }
     const url = `${API_URL}/api/auth/register`;
-    const response = await fetchWithTimeout(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
-    });
-
-    if (!response.ok) {
-      const msg = await safeReadError(response, url);
-      throw new Error(msg);
+    // eslint-disable-next-line no-console
+    console.log('[authStore] axios POST ->', url);
+    try {
+      const res = await axios.post(
+        url,
+        { email, password, name },
+        { timeout: 90000, headers: { 'Content-Type': 'application/json' } }
+      );
+      // eslint-disable-next-line no-console
+      console.log('[authStore] axios <-', res.status);
+      const data = res.data;
+      await AsyncStorage.setItem('token', data.access_token);
+      await AsyncStorage.setItem('user', JSON.stringify(data.user));
+      set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
+    } catch (err: any) {
+      // eslint-disable-next-line no-console
+      console.log('[authStore] axios FAIL', err?.code, err?.message, err?.response?.status, err?.response?.data);
+      throw new Error(formatAxiosError(err, url));
     }
-
-    const data = await response.json();
-    await AsyncStorage.setItem('token', data.access_token);
-    await AsyncStorage.setItem('user', JSON.stringify(data.user));
-    
-    set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
   },
 
   logout: async () => {
@@ -184,13 +210,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   refreshUser: async () => {
     try {
       const token = await AsyncStorage.getItem('token');
-      if (!token || !API_URL) return;
-      const res = await fetchWithTimeout(`${API_URL}/api/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-        const user = await res.json();
-        await AsyncStorage.setItem('user', JSON.stringify(user));
-        set({ user });
-      }
+      if (!token) return;
+      const res = await axios.get(`${API_URL}/api/auth/me`, {
+        timeout: 30000,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const user = res.data;
+      await AsyncStorage.setItem('user', JSON.stringify(user));
+      set({ user });
     } catch {}
   },
 }));
