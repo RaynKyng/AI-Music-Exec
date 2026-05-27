@@ -110,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
     }
     const url = `${API_URL}/api/auth/login`;
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
@@ -133,7 +133,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
     }
     const url = `${API_URL}/api/auth/register`;
-    const response = await fetchWithTimeout(url, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password, name }),
