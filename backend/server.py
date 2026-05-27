@@ -42,7 +42,7 @@ app = FastAPI(title="AI Music Artist Manager")
 
 # Set up uploads directory
 import pathlib
-UPLOAD_DIR = pathlib.Path("/app/backend/uploads")
+UPLOAD_DIR = pathlib.Path("./uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 (UPLOAD_DIR / "audio").mkdir(parents=True, exist_ok=True)
 app.mount("/api/audio", StaticFiles(directory=str(UPLOAD_DIR / "audio")), name="audio")
