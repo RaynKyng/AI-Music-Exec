@@ -6,7 +6,7 @@ import { User } from '../types';
 // EAS Update doesn't always pick up env vars from eas.json's build profile,
 // so we ship the prod URL as a fallback to guarantee the app always knows
 // where to talk to the backend, no matter how the bundle was produced.
-const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
+const API_URL = "https://ai-music-exec-backend.onrender.com";
 
 // Helpful info log so we can see the actual URL in adb logcat / Metro logs.
 // eslint-disable-next-line no-console
