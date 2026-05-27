@@ -26,7 +26,7 @@
       },
       "env": {
         "ENVIRONMENT": "preview",
-        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.emergent.host"
+        "EXPO_PUBLIC_BACKEND_URL": "https://ai-music-exec-backend.onrender.com"
       }
     },
     "production": {
@@ -37,7 +37,7 @@
       },
       "env": {
         "ENVIRONMENT": "production",
-        "EXPO_PUBLIC_BACKEND_URL": "https://artist-catalog-pro.emergent.host"
+        "EXPO_PUBLIC_BACKEND_URL": "https://ai-music-exec-backend.onrender.com"
       }
     }
   },
