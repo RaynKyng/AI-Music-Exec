@@ -65,7 +65,7 @@ export default function Index() {
 
   // Helper for the diagnostic — fires a fetch with Promise.race timeout
   // against a single URL and returns a short summary string.
-  const probeOne = async (url: string, timeoutMs = 30000): Promise<string> => {
+  const probeOne = async (url: string, timeoutMs = 90000): Promise<string> => {
     const controller = new AbortController();
     let timer: any;
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -103,8 +103,8 @@ export default function Index() {
       return;
     }
     const [backendResult, controlResult] = await Promise.all([
-      probeOne(`${API_URL_DEBUG}/api/`, 30000),
-      probeOne('https://httpbin.org/get', 30000),
+      probeOne(`${API_URL_DEBUG}/api/`, 90000),
+      probeOne('https://httpbin.org/get', 90000),
     ]);
     Alert.alert(
       'Connectivity Test',
