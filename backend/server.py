@@ -40,6 +40,10 @@ EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 # Create the main app
 app = FastAPI(title="AI Music Artist Manager")
 
+@app.get("/api/")
+async def api_root():
+    return {"status": "ok"}
+
 # Set up uploads directory
 import pathlib
 UPLOAD_DIR = pathlib.Path("./uploads")
