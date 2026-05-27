@@ -15,7 +15,6 @@ import uuid
 from datetime import datetime, timedelta
 import jwt
 from passlib.context import CryptContext
-from emergentintegrations.llm.chat import LlmChat, UserMessage
 import push_service
 
 ROOT_DIR = Path(__file__).parent
