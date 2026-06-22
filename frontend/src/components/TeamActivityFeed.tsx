@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Card } from './Card';
 import { colors, spacing } from '../utils/theme';
-
-const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
+import { api, formatApiError } from '../utils/api';
 
 type Activity = {
   id: string;
@@ -74,14 +72,13 @@ export function TeamActivityFeed() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const token = await AsyncStorage.getItem('token');
-      const res = await fetch(`${API_URL}/api/activity/recent?limit=30`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setItems(Array.isArray(data) ? data : (data.activities || []));
-      }
+      const res = await api.get('/api/activity/recent', { params: { limit: 30 } });
+      const data = res.data;
+      setItems(Array.isArray(data) ? data : (data?.activities || []));
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.log('[TeamActivityFeed] load failed:', formatApiError(err));
+      setItems([]);
     } finally {
       setLoading(false);
     }
