@@ -15,6 +15,12 @@ import uuid
 from datetime import datetime, timedelta
 import jwt
 from passlib.context import CryptContext
+# LLM client: a thin wrapper around `litellm` that mirrors the public API
+# of `emergentintegrations.llm.chat` (LlmChat / UserMessage). This removes
+# the runtime dependency on the private `emergentintegrations` package
+# (which doesn't install on Render without a custom pip index) while
+# preserving every existing call site untouched.
+from llm_client import LlmChat, UserMessage
 import push_service
 
 ROOT_DIR = Path(__file__).parent
