@@ -1,10 +1,26 @@
 import { create } from 'zustand';
+import axios from 'axios';
 import { Artist, Song, Idea, Distribution, DashboardStats, SunoGeneration, SharingFormats } from '../types';
 import { api, formatApiError } from '../utils/api';
 
 // Note: API_URL and Bearer-token injection are owned by the shared axios
 // instance in `../utils/api`. This store only declares paths starting with
 // `/api/...` and lets the interceptor attach auth.
+
+/**
+ * A list-fetch failure surface.
+ *
+ * Critical to the artist/release visibility regression: when a list
+ * endpoint fails, we MUST NOT silently replace `artists: []` because
+ * that's indistinguishable from "no records yet" and looks like data
+ * loss. Instead we preserve the last successful list, raise this
+ * structured error, and let the screen render a retry banner.
+ */
+export interface ListFetchError {
+  status: number | null;   // HTTP status if we got a response; null for network/timeout
+  message: string;         // sanitized user-facing message
+  at: number;              // Date.now() — for stale-error filtering on screen
+}
 
 interface DataState {
   artists: Artist[];
@@ -13,6 +29,19 @@ interface DataState {
   distributions: Distribution[];
   stats: DashboardStats | null;
   isLoading: boolean;
+
+  // List-specific failure surfaces. `null` means "loaded cleanly" (which
+  // includes the empty-list case). A non-null value means the LAST
+  // refresh attempt failed — the screen should keep showing the
+  // previous list (preserved in `artists` / `collections`) and offer
+  // a retry. These are cleared on a successful refresh.
+  artistsError: ListFetchError | null;
+  collectionsError: ListFetchError | null;
+  // True after we've completed at least one successful fetch (so the
+  // empty list can be safely interpreted as "no records yet" rather
+  // than "haven't tried loading yet").
+  artistsLoadedOnce: boolean;
+  collectionsLoadedOnce: boolean;
 
   // Artists
   fetchArtists: (search?: string, genre?: string) => Promise<void>;
@@ -54,6 +83,20 @@ interface DataState {
   getShareFormats: (songId: string, platforms: string[]) => Promise<SharingFormats>;
 }
 
+// Build a ListFetchError from an axios/JS error. Logs the actual HTTP
+// status so it shows up in console / dev tools — a future 500 should
+// never look like silent data deletion.
+function _toListError(err: unknown, url: string): ListFetchError {
+  let status: number | null = null;
+  if (axios.isAxiosError(err)) {
+    status = err.response?.status ?? null;
+  }
+  const message = formatApiError(err, url);
+  // eslint-disable-next-line no-console
+  console.warn(`[dataStore] list fetch failed ${url}: status=${status} message=${message}`);
+  return { status, message, at: Date.now() };
+}
+
 export const useDataStore = create<DataState>((set, get) => ({
   artists: [],
   songs: [],
@@ -61,6 +104,11 @@ export const useDataStore = create<DataState>((set, get) => ({
   distributions: [],
   stats: null,
   isLoading: false,
+
+  artistsError: null,
+  collectionsError: null,
+  artistsLoadedOnce: false,
+  collectionsLoadedOnce: false,
 
   // Artists --------------------------------------------------------------
   fetchArtists: async (search, genre) => {
@@ -70,11 +118,22 @@ export const useDataStore = create<DataState>((set, get) => ({
       if (search) params.search = search;
       if (genre) params.genre = genre;
       const res = await api.get('/api/artists', { params });
-      set({ artists: Array.isArray(res.data) ? res.data : [], isLoading: false });
+      const list = Array.isArray(res.data) ? res.data : [];
+      set({
+        artists: list,
+        artistsError: null,
+        artistsLoadedOnce: true,
+        isLoading: false,
+      });
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.log('[dataStore] fetchArtists failed:', formatApiError(err));
-      set({ artists: [], isLoading: false });
+      // CRITICAL: do NOT clobber the previously-loaded list. A 500 or
+      // network blip must not look like "all your artists vanished".
+      // Preserve get().artists and set an error surface that the screen
+      // can render as a retry banner.
+      set({
+        artistsError: _toListError(err, '/api/artists'),
+        isLoading: false,
+      });
     }
   },
 

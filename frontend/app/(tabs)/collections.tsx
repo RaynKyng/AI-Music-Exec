@@ -11,17 +11,26 @@ import { Card } from '../../src/components/Card';
 import { Input } from '../../src/components/Input';
 import { Button } from '../../src/components/Button';
 import { SearchBar } from '../../src/components/SearchBar';
+import { ListErrorBanner } from '../../src/components/ListErrorBanner';
 import { useDataStore } from '../../src/stores/dataStore';
+import type { ListFetchError } from '../../src/stores/dataStore';
 import { colors, spacing } from '../../src/utils/theme';
 import { confirmDestructive } from '../../src/utils/confirm';
+import { api, formatApiError } from '../../src/utils/api';
+import axios from 'axios';
 
-const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
 
 export default function CollectionsScreen() {
   const router = useRouter();
   const { artists, fetchArtists } = useDataStore();
   const [collections, setCollections] = useState<any[]>([]);
+  // Local error surface for the Releases/Playlists list, mirroring the
+  // artistsError pattern in dataStore. Failed refreshes must NOT silently
+  // clobber `collections` to []; we preserve the last list and show a
+  // visible retry banner.
+  const [collectionsError, setCollectionsError] = useState<ListFetchError | null>(null);
+  const [collectionsLoadedOnce, setCollectionsLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -44,24 +53,27 @@ export default function CollectionsScreen() {
     AsyncStorage.setItem('collectionsViewMode', next);
   };
 
-  const authFetch = async (url: string, options: RequestInit = {}) => {
-    const token = await AsyncStorage.getItem('token');
-    return fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...options.headers } });
-  };
-
   const loadCollections = async () => {
     try {
-      const res = await authFetch(`${API_URL}/api/collections`);
-      const data = await res.json();
+      const res = await api.get('/api/collections');
+      const data = res.data;
       setCollections(Array.isArray(data) ? data : []);
-    } catch { /* ignore */ }
+      setCollectionsError(null);
+      setCollectionsLoadedOnce(true);
+    } catch (err) {
+      // Preserve the last successful list; do not blank it on a refresh failure.
+      const status = axios.isAxiosError(err) ? (err.response?.status ?? null) : null;
+      const message = formatApiError(err, '/api/collections');
+      // eslint-disable-next-line no-console
+      console.warn(`[collections] list refresh failed: status=${status} message=${message}`);
+      setCollectionsError({ status, message, at: Date.now() });
+    }
   };
 
   const onRefresh = async () => { setRefreshing(true); await loadCollections(); setRefreshing(false); };
 
   const handleCreate = async () => {
     if (!form.title.trim()) { Alert.alert('Error', 'Title required'); return; }
-    // Playlists are artist-agnostic. Albums/EPs/Singles need a primary artist.
     if (form.collection_type !== 'Playlist' && !form.artist_id) {
       Alert.alert('Error', 'Select a primary artist (or change Type to Playlist for artist-agnostic curation).');
       return;
@@ -69,19 +81,25 @@ export default function CollectionsScreen() {
     setSaving(true);
     try {
       const payload = { ...form, artist_id: form.collection_type === 'Playlist' ? null : form.artist_id };
-      const res = await authFetch(`${API_URL}/api/collections`, { method: 'POST', body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error('Failed');
+      await api.post('/api/collections', payload);
       await loadCollections();
       setModalVisible(false);
       setForm({ title: '', artist_id: '', collection_type: 'EP', description: '', cover_image_url: '', status: 'in_progress', notes: '' });
-    } catch { Alert.alert('Error', 'Failed to create'); }
-    finally { setSaving(false); }
+    } catch (err) {
+      Alert.alert('Could not create release', formatApiError(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = (coll: any) => {
     confirmDestructive(`Delete "${coll.title}"?`, 'Delete Collection').then(async (ok) => {
       if (!ok) return;
-      await authFetch(`${API_URL}/api/collections/${coll.id}`, { method: 'DELETE' });
+      try {
+        await api.delete(`/api/collections/${coll.id}`);
+      } catch (err) {
+        Alert.alert('Delete failed', formatApiError(err));
+      }
       loadCollections();
     });
   };
@@ -133,19 +151,43 @@ export default function CollectionsScreen() {
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
+        {/* Failed-refresh banner: shown when the last loadCollections() rejected.
+            Distinct from the empty state so a 500 never looks like silent
+            data deletion. */}
+        <ListErrorBanner
+          error={collectionsError}
+          onRetry={onRefresh}
+          hasStaleList={collections.length > 0}
+        />
         {filtered.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name={activeView === 'playlists' ? 'list-outline' : 'albums-outline'} size={64} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>{activeView === 'playlists' ? 'No Playlists Yet' : 'No Releases Yet'}</Text>
-            <Text style={styles.emptyText}>{activeView === 'playlists' ? 'Curate songs across artists into themed playlists for testing in your car.' : 'Organize songs into EPs, LPs, and Albums.'}</Text>
-            <Pressable style={styles.emptyButton} onPress={() => {
-              setForm({ ...form, collection_type: activeView === 'playlists' ? 'Playlist' : 'EP' });
-              setModalVisible(true);
-            }}>
-              <Ionicons name="add" size={20} color={colors.text} />
-              <Text style={styles.emptyButtonText}>{activeView === 'playlists' ? 'New Playlist' : 'New Release'}</Text>
-            </Pressable>
-          </View>
+          // Three distinct states:
+          //   1) Active filter/search hiding items (handled below by emptyText)
+          //   2) "Could not load" — fetch failed AND we never had a list before
+          //   3) Genuinely empty (loaded successfully, 0 records)
+          (collectionsError && !collectionsLoadedOnce) ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="cloud-offline-outline" size={64} color={colors.warning} />
+              <Text style={styles.emptyTitle}>
+                {activeView === 'playlists' ? 'Playlists could not be loaded' : 'Releases could not be loaded'}
+              </Text>
+              <Text style={styles.emptyText}>
+                We hit a problem talking to the server. Pull down to refresh, or tap retry on the banner above.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name={activeView === 'playlists' ? 'list-outline' : 'albums-outline'} size={64} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>{activeView === 'playlists' ? 'No Playlists Yet' : 'No Releases Yet'}</Text>
+              <Text style={styles.emptyText}>{activeView === 'playlists' ? 'Curate songs across artists into themed playlists for testing in your car.' : 'Organize songs into EPs, LPs, and Albums.'}</Text>
+              <Pressable style={styles.emptyButton} onPress={() => {
+                setForm({ ...form, collection_type: activeView === 'playlists' ? 'Playlist' : 'EP' });
+                setModalVisible(true);
+              }}>
+                <Ionicons name="add" size={20} color={colors.text} />
+                <Text style={styles.emptyButtonText}>{activeView === 'playlists' ? 'New Playlist' : 'New Release'}</Text>
+              </Pressable>
+            </View>
+          )
         ) : viewMode === 'list' ? (
           // === COMPACT LIST VIEW ===
           <View style={styles.listContainer}>
