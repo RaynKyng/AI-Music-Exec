@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useDataStore } from '../../src/stores/dataStore';
 import { Card } from '../../src/components/Card';
 import { SearchBar } from '../../src/components/SearchBar';
+import { ListErrorBanner } from '../../src/components/ListErrorBanner';
 import { colors, spacing } from '../../src/utils/theme';
 import { confirmDestructive } from '../../src/utils/confirm';
 import { Artist } from '../../src/types';
@@ -22,7 +23,13 @@ const SORT_OPTIONS = [
 
 export default function ArtistsScreen() {
   const router = useRouter();
-  const { artists, fetchArtists, deleteArtist } = useDataStore();
+  const {
+    artists,
+    artistsError,
+    artistsLoadedOnce,
+    fetchArtists,
+    deleteArtist,
+  } = useDataStore();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('name_asc');
@@ -158,6 +165,15 @@ export default function ArtistsScreen() {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
 
+        {/* Failed-refresh banner: shown when the last fetchArtists() rejected.
+            Distinct from the empty state so a 500 never looks like silent
+            data deletion. */}
+        <ListErrorBanner
+          error={artistsError}
+          onRetry={onRefresh}
+          hasStaleList={artists.length > 0}
+        />
+
         {/* Count indicator */}
         <Text style={styles.countLabel}>
           {displayArtists.length} artist{displayArtists.length !== 1 ? 's' : ''}
@@ -165,19 +181,33 @@ export default function ArtistsScreen() {
         </Text>
 
         {displayArtists.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="people-outline" size={64} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>{search || genreFilter ? 'No Results' : 'No Artists Yet'}</Text>
-            <Text style={styles.emptyText}>
-              {search ? `No artists matching "${search}"` : genreFilter ? `No artists in ${genreFilter}` : 'Start building your roster'}
-            </Text>
-            {!search && !genreFilter && (
-              <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/artist/new')}>
-                <Ionicons name="add" size={20} color={colors.text} />
-                <Text style={styles.emptyButtonText}>Add Artist</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          // Three distinct states:
+          //   1) Active filter or search (no matches in already-loaded data)
+          //   2) "Couldn't load" — fetch failed AND we never had a list before
+          //   3) Genuinely empty roster (loaded successfully, 0 records)
+          (artistsError && !artistsLoadedOnce) ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="cloud-offline-outline" size={64} color={colors.warning} />
+              <Text style={styles.emptyTitle}>Artists could not be loaded</Text>
+              <Text style={styles.emptyText}>
+                We hit a problem talking to the server. Pull down to refresh, or tap retry on the banner above.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="people-outline" size={64} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>{search || genreFilter ? 'No Results' : 'No Artists Yet'}</Text>
+              <Text style={styles.emptyText}>
+                {search ? `No artists matching "${search}"` : genreFilter ? `No artists in ${genreFilter}` : 'Start building your roster'}
+              </Text>
+              {!search && !genreFilter && (
+                <TouchableOpacity style={styles.emptyButton} onPress={() => router.push('/artist/new')}>
+                  <Ionicons name="add" size={20} color={colors.text} />
+                  <Text style={styles.emptyButtonText}>Add Artist</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
         ) : viewMode === 'list' ? (
           // === COMPACT LIST VIEW (default) ===
           <View style={styles.listContainer}>

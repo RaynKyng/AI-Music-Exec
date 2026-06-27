@@ -21,6 +21,15 @@ from passlib.context import CryptContext
 # (which doesn't install on Render without a custom pip index) while
 # preserving every existing call site untouched.
 from llm_client import LlmChat, UserMessage
+# Read-time normalizer for Artist / Collection documents. Recovers
+# legacy / AI-generated shapes so a single bad doc doesn't 500 the whole
+# list endpoint. See doc_normalizer.py for the full rules.
+from doc_normalizer import (
+    normalize_artist_doc,
+    normalize_collection_doc,
+    safe_validate,
+    safe_validate_many,
+)
 import push_service
 
 ROOT_DIR = Path(__file__).parent
@@ -866,38 +875,66 @@ async def delete_artist_saved_prompt(artist_id: str, prompt_id: str, current_use
     )
     return {"message": "Saved prompt deleted"}
 
-@api_router.get("/artists", response_model=List[Artist])
+@api_router.get("/artists", response_model=None)
 async def get_artists(
     search: Optional[str] = None,
     genre: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
+    """List artists for the current team workspace.
+
+    Reads each MongoDB doc, normalizes any legacy/malformed shape via
+    `normalize_artist_doc`, then validates against the Artist Pydantic
+    model. Documents that are still invalid after normalization are
+    skipped with a warning log (id + sanitized error) so a single
+    corrupt record cannot 500 the entire endpoint.
+    """
     query = team_query(current_user)
-    
+
     # Projection excludes the big `saved_prompts` arrays for list view. Pydantic Artist defaults to [].
     artists = await db.artists.find(query, {"_id": 0, "saved_prompts": 0}).to_list(1000)
-    
-    # Apply filters
+
+    # Apply text/genre filters BEFORE Pydantic validation so the filter
+    # criteria operate on raw shapes too (e.g. a doc with genres as a
+    # string still gets filtered correctly).
     if search:
         search_lower = search.lower()
-        artists = [a for a in artists if 
-                   search_lower in a.get("name", "").lower() or 
-                   search_lower in a.get("bio", "").lower() or
-                   search_lower in a.get("unique_sound", "").lower()]
-    
+        artists = [a for a in artists if
+                   search_lower in (a.get("name") or "").lower() or
+                   search_lower in (a.get("bio") or "").lower() or
+                   search_lower in (a.get("unique_sound") or "").lower()]
+
     if genre:
         genre_lower = genre.lower()
-        artists = [a for a in artists if 
-                   any(genre_lower in g.lower() for g in a.get("genres", []))]
-    
-    return [Artist(**a) for a in artists]
+        def _has_genre(a):
+            g = a.get("genres") or []
+            if isinstance(g, str):
+                return genre_lower in g.lower()
+            return any(genre_lower in str(x).lower() for x in g if isinstance(x, (str, dict)))
+        artists = [a for a in artists if _has_genre(a)]
 
-@api_router.get("/artists/{artist_id}", response_model=Artist)
+    objects, _counts, _skipped = safe_validate_many(
+        Artist, artists, normalize_artist_doc, log_label="GET /api/artists",
+    )
+    return objects
+
+@api_router.get("/artists/{artist_id}", response_model=None)
 async def get_artist(artist_id: str, current_user: dict = Depends(get_current_user)):
     artist = await db.artists.find_one(team_query(current_user, {"id": artist_id}))
     if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
-    return Artist(**artist)
+    artist = {k: v for k, v in artist.items() if k != "_id"}
+    obj, status, err = safe_validate(Artist, artist, normalize_artist_doc)
+    if obj is None:
+        # Truly unrecoverable single doc — log and surface a clear 422 so
+        # the client can show a "this artist record is corrupt" message
+        # rather than silently empty data.
+        logger.warning("[GET /api/artists/%s] unrecoverable: %s", artist_id, err)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artist record is malformed and could not be normalized: {err}",
+        )
+    return obj
 
 @api_router.put("/artists/{artist_id}", response_model=Artist)
 async def update_artist(artist_id: str, artist_data: ArtistCreate, current_user: dict = Depends(get_current_user)):
@@ -1326,6 +1363,84 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         },
         "recent_songs": [{"id": s["id"], "title": s["title"], "status": s["status"]} for s in recent_songs],
         "recent_ideas": [{"id": i["id"], "title": i["title"], "type": i["type"]} for i in recent_ideas]
+    }
+
+# ============== Diagnostic: validation health =================
+# Protected, owner/admin-only, returns sanitized validation summary so we
+# can identify which prod documents need cleanup WITHOUT exposing private
+# content, tokens, or images. Safe to leave deployed; easy to delete.
+
+_DIAG_ALLOWED_COLLECTIONS = {
+    "artists":     (Artist,     normalize_artist_doc),
+    "collections": (Collection, normalize_collection_doc),
+}
+
+def _diag_allowed(current_user: dict) -> bool:
+    """Allow team owners / admins to call the diagnostic endpoint, plus
+    anyone in dev (`ENVIRONMENT=development`)."""
+    if os.environ.get("ENVIRONMENT", "").lower() in ("dev", "development", "local"):
+        return True
+    role = (current_user.get("role") or "").lower()
+    if role in ("owner", "admin"):
+        return True
+    # A user that owns their own team (team_id == own id) is implicitly the owner
+    if current_user.get("team_id") in (None, "", current_user.get("id")):
+        return True
+    return False
+
+@api_router.get("/_diag/validate")
+async def diag_validate(
+    collection: str = "artists",
+    current_user: dict = Depends(get_current_user),
+):
+    """Report validation/normalization health for the current team's records.
+
+    Auth required. Owner/admin (or dev mode) only. Returns ONLY:
+      - per-collection totals (total / clean / normalized / unrecoverable)
+      - per-document id, display_name, status, sanitized error string
+      - dashboard-count vs visible-list comparison so any discrepancy is
+        explicit, not silently forced to match.
+
+    Never returns full document bodies, image payloads, tokens, lyrics,
+    private notes, or any other user data.
+    """
+    if collection not in _DIAG_ALLOWED_COLLECTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unknown collection; allowed: {sorted(_DIAG_ALLOWED_COLLECTIONS.keys())}",
+        )
+    if not _diag_allowed(current_user):
+        raise HTTPException(status_code=403, detail="diagnostic endpoint requires owner/admin")
+
+    model_cls, normalizer = _DIAG_ALLOWED_COLLECTIONS[collection]
+
+    query = team_query(current_user)
+    dashboard_count = await db[collection].count_documents(query)
+    docs = await db[collection].find(query, {"_id": 0}).to_list(2000)
+
+    counts = {"total": len(docs), "clean": 0, "normalized": 0, "skipped": 0}
+    per_doc: List[Dict[str, Any]] = []
+    for d in docs:
+        _obj, status, err = safe_validate(model_cls, d, normalizer)
+        counts[status] += 1
+        per_doc.append({
+            "id": d.get("id"),
+            "display_name": d.get("name") or d.get("title"),
+            "status": status,
+            "error": err,  # sanitized "field_path:error_type; ..." string from safe_validate
+        })
+
+    visible_count = counts["clean"] + counts["normalized"]
+    discrepancy = dashboard_count - visible_count
+
+    return {
+        "collection": collection,
+        "dashboard_count": dashboard_count,
+        "visible_count": visible_count,
+        "discrepancy": discrepancy,
+        "counts": counts,
+        "records": per_doc,
+        "diag_allowed_reason": "owner_or_admin_or_dev_mode",
     }
 
 # ============== Quick Add Song with AI Analysis ==============
@@ -1758,20 +1873,39 @@ async def create_collection(data: CollectionCreate, current_user: dict = Depends
     await db.collections.insert_one(d)
     return Collection(**d)
 
-@api_router.get("/collections", response_model=List[Collection])
+@api_router.get("/collections", response_model=None)
 async def get_collections(artist_id: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """List collections (releases + playlists) for the current team workspace.
+
+    Uses read-time normalization (see doc_normalizer.py) so legacy docs
+    with malformed shapes (e.g. release_date as a datetime, title null,
+    cover_image null) still render instead of 500-ing the whole list.
+    """
     query = team_query(current_user)
     if artist_id:
         query["artist_id"] = artist_id
     items = await db.collections.find(query).sort("updated_at", -1).to_list(1000)
-    return [Collection(**c) for c in items]
+    items = [{k: v for k, v in c.items() if k != "_id"} for c in items]
+    objects, _counts, _skipped = safe_validate_many(
+        Collection, items, normalize_collection_doc,
+        log_label="GET /api/collections",
+    )
+    return objects
 
-@api_router.get("/collections/{coll_id}", response_model=Collection)
+@api_router.get("/collections/{coll_id}", response_model=None)
 async def get_collection(coll_id: str, current_user: dict = Depends(get_current_user)):
     c = await db.collections.find_one(team_query(current_user, {"id": coll_id}))
     if not c:
         raise HTTPException(status_code=404, detail="Collection not found")
-    return Collection(**c)
+    c = {k: v for k, v in c.items() if k != "_id"}
+    obj, status, err = safe_validate(Collection, c, normalize_collection_doc)
+    if obj is None:
+        logger.warning("[GET /api/collections/%s] unrecoverable: %s", coll_id, err)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Collection record is malformed and could not be normalized: {err}",
+        )
+    return obj
 
 @api_router.put("/collections/{coll_id}", response_model=Collection)
 async def update_collection(coll_id: str, data: CollectionCreate, current_user: dict = Depends(get_current_user)):
