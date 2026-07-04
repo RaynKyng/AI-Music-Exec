@@ -119,13 +119,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       if (genre) params.genre = genre;
       const res = await api.get('/api/artists', { params });
       const list = Array.isArray(res.data) ? res.data : [];
-      console.log(
-  	'[artists-debug]',
-  	'status=', res.status,
-  	'isArray=', Array.isArray(res.data),
-  	'length=', list.length,
-  	'first=', list[0]?.name
-);
+      
 	set({
         artists: list,
         artistsError: null,
