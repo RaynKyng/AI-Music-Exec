@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { User } from '../types';
+import { api, formatApiError } from '../utils/api';
 
 // Single source of truth for backend URL with hardcoded production fallback.
 // EAS Update doesn't always pick up env vars from eas.json's build profile,
@@ -106,50 +107,51 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   didLogout: false,
 
   login: async (email: string, password: string) => {
-    if (!API_URL) {
-      throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
-    }
-    const url = `${API_URL}/api/auth/login`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+  try {
+    const response = await api.post('/api/auth/login', {
+      email,
+      password,
     });
 
-    if (!response.ok) {
-      const msg = await safeReadError(response, url);
-      throw new Error(msg);
-    }
+    const data = response.data;
 
-    const data = await response.json();
     await AsyncStorage.setItem('token', data.access_token);
     await AsyncStorage.setItem('user', JSON.stringify(data.user));
-    
-    set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
-  },
+
+    set({
+      user: data.user,
+      token: data.access_token,
+      isAuthenticated: true,
+      didLogout: false,
+    });
+  } catch (error) {
+    throw new Error(formatApiError(error, '/api/auth/login'));
+  }
+},
 
   register: async (email: string, password: string, name: string) => {
-    if (!API_URL) {
-      throw new Error('App is missing EXPO_PUBLIC_BACKEND_URL. Please rebuild the APK with the env var set in eas.json.');
-    }
-    const url = `${API_URL}/api/auth/register`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name }),
+  try {
+    const response = await api.post('/api/auth/register', {
+      email,
+      password,
+      name,
     });
 
-    if (!response.ok) {
-      const msg = await safeReadError(response, url);
-      throw new Error(msg);
-    }
+    const data = response.data;
 
-    const data = await response.json();
     await AsyncStorage.setItem('token', data.access_token);
     await AsyncStorage.setItem('user', JSON.stringify(data.user));
-    
-    set({ user: data.user, token: data.access_token, isAuthenticated: true, didLogout: false });
-  },
+
+    set({
+      user: data.user,
+      token: data.access_token,
+      isAuthenticated: true,
+      didLogout: false,
+    });
+  } catch (error) {
+    throw new Error(formatApiError(error, '/api/auth/register'));
+  }
+},
 
   logout: async () => {
     try {
