@@ -896,7 +896,16 @@ async def get_artists(
     query = team_query(current_user)
 
     # Projection excludes the big `saved_prompts` arrays for list view. Pydantic Artist defaults to [].
-    artists = await db.artists.find(query, {"_id": 0, "saved_prompts": 0}).to_list(1000)
+    artists = await db.artists.find(
+    	query,
+    	{
+            "_id": 0,
+            "saved_prompts": 0,
+            "profile_image": 0,
+            "character_images": 0,
+            "visual_references": 0,
+    	},
+    ).to_list(1000)
 
     # Apply text/genre filters BEFORE Pydantic validation so the filter
     # criteria operate on raw shapes too (e.g. a doc with genres as a
