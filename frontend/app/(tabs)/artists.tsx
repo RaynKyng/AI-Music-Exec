@@ -4,7 +4,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useDataStore } from '../../src/stores/dataStore';
 import { Card } from '../../src/components/Card';
@@ -36,7 +36,11 @@ export default function ArtistsScreen() {
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'cards'>('list');
 
-  useEffect(() => { fetchArtists(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchArtists();
+    }, [fetchArtists])
+  );
 
   useEffect(() => {
     AsyncStorage.getItem('artistsViewMode').then((v) => {
