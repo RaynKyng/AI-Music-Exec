@@ -179,6 +179,11 @@ export default function ArtistsScreen() {
           {displayArtists.length} artist{displayArtists.length !== 1 ? 's' : ''}
           {genreFilter ? ` in ${genreFilter}` : ''}
         </Text>
+	<Text style={{ color: 'yellow', paddingHorizontal: 16 }}>
+	  DEBUG raw={artists.length} displayed={displayArtists.length}
+	  {' '}loaded={String(artistsLoadedOnce)}
+	  {' '}error={artistsError ? artistsError.message : 'none'}
+	</Text>
 
         {displayArtists.length === 0 ? (
           // Three distinct states:
