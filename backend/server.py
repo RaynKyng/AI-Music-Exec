@@ -933,10 +933,18 @@ async def get_artists(
 
 @api_router.get("/artists/{artist_id}", response_model=None)
 async def get_artist(artist_id: str, current_user: dict = Depends(get_current_user)):
-    artist = await db.artists.find_one(team_query(current_user, {"id": artist_id}))
+    artist = await db.artists.find_one(
+        team_query(current_user, {"id": artist_id}),
+        {
+            "_id": 0,
+            "saved_prompts": 0,
+            "profile_image": 0,
+            "character_images": 0,
+            "visual_references": 0,
+        },
+    )
     if not artist:
         raise HTTPException(status_code=404, detail="Artist not found")
-    artist = {k: v for k, v in artist.items() if k != "_id"}
     obj, status, err = safe_validate(Artist, artist, normalize_artist_doc)
     if obj is None:
         # Truly unrecoverable single doc — log and surface a clear 422 so
