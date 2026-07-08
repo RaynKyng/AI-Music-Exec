@@ -22,6 +22,7 @@ import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { CollabComments } from '../../src/components/CollabComments';
 import { colors, spacing } from '../../src/utils/theme';
 import { safeGoBack } from '../../src/utils/nav';
+import { api, formatApiError } from '../../src/utils/api';
 
 export default function ArtistDetailScreen() {
   const router = useRouter();
@@ -70,13 +71,11 @@ export default function ArtistDetailScreen() {
   const [savedPrompts, setSavedPrompts] = useState<any[]>([]);
 
   const loadArtist = async () => {
+    setLoading(true);
     try {
-      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/artists/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { setLoading(false); return; }
-      const artist = await res.json();
+      const res = await api.get(`/api/artists/${id}`);
+      const artist = res.data;
+
       setForm({
         name: artist.name || '',
         bio: artist.bio || '',
@@ -95,9 +94,13 @@ export default function ArtistDetailScreen() {
         suno_exclusions: artist.suno_exclusions || '',
         notes: artist.notes || '',
       });
+
       setSavedPrompts(artist.saved_prompts || []);
-    } catch { /* ignore */ }
-    setLoading(false);
+    } catch (error: any) {
+      Alert.alert('Error', formatApiError(error, `/api/artists/${id}`));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -268,7 +271,7 @@ export default function ArtistDetailScreen() {
                 <Ionicons name="link" size={26} color={colors.secondary} />
                 <Text style={styles.galleryAddText}>URL</Text>
               </Pressable>
-            </ScrollView>
+            </ScrollView>loadArtist
           </Card>
 
           {/* AI Prompts Gallery */}
@@ -339,8 +342,7 @@ export default function ArtistDetailScreen() {
                           { text: 'Cancel', style: 'cancel' },
                           { text: 'Delete', style: 'destructive', onPress: async () => {
                             try {
-                              const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-                              await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/artists/${id}/saved-prompts/${p.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                              await api.delete(`/api/artists/${id}/saved-prompts/${p.id}`);
                               setSavedPrompts(savedPrompts.filter((x: any) => x.id !== p.id));
                             } catch {}
                           }}
