@@ -21,6 +21,7 @@ import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { colors, spacing, ideaTypeColors } from '../../src/utils/theme';
 import { safeGoBack } from '../../src/utils/nav';
 import { Idea } from '../../src/types';
+import { api, formatApiError } from '../../src/utils/api';
 
 const IDEA_TYPES = ['spark', 'concept', 'lyrics', 'melody', 'style', 'visual'];
 
@@ -53,24 +54,25 @@ export default function IdeaDetailScreen() {
   }, [id]);
 
   const loadIdea = async () => {
-    try {
-      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/ideas/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) { setLoading(false); return; }
-      const idea = await res.json();
-      setForm({
-        title: idea.title,
-        content: idea.content,
-        type: idea.type,
-        tags: idea.tags || [],
-        linked_artist_id: idea.linked_artist_id,
-        linked_song_id: idea.linked_song_id,
-      });
-    } catch { /* ignore */ }
+  setLoading(true);
+  try {
+    const res = await api.get(`/api/ideas/${id}`);
+    const idea = res.data;
+
+    setForm({
+      title: idea.title || '',
+      content: idea.content || '',
+      type: idea.type || 'spark',
+      tags: idea.tags || [],
+      linked_artist_id: idea.linked_artist_id || null,
+      linked_song_id: idea.linked_song_id || null,
+    });
+  } catch (error: any) {
+    Alert.alert('Network error', formatApiError(error, `/api/ideas/${id}`));
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   const handleSave = async () => {
     if (!form.title.trim()) {

@@ -23,6 +23,7 @@ import { CollabComments } from '../../src/components/CollabComments';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
 import { safeGoBack } from '../../src/utils/nav';
 import { Song } from '../../src/types';
+import { api, formatApiError } from '../../src/utils/api';
 
 const STATUS_OPTIONS = ['draft', 'in_progress', 'final', 'released'];
 const VERSION_TYPES = ['primary', 'secondary', 'alternate'];
@@ -89,58 +90,48 @@ export default function SongDetailScreen() {
 
   const loadCollections = async () => {
     try {
-      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/collections`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setCollections(Array.isArray(data) ? data : []);
-    } catch { /* ignore */ }
+      const res = await api.get('/api/collections');
+      setCollections(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setCollections([]);
+    }
   };
 
   const loadSong = async () => {
-    try {
-      const token = await (await import('@react-native-async-storage/async-storage')).default.getItem('token');
-      const res = await fetch(`${(process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host")}/api/songs/${id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        setLoading(false);
-        Alert.alert('Song unavailable', 'This song could not be loaded. It may have been deleted or you don\u2019t have access to it.', [
-          { text: 'Go back', onPress: () => safeGoBack('/songs') },
-        ]);
-        return;
-      }
-      const song = await res.json();
-      setForm({
-        title: song.title || '',
-        artist_id: song.artist_id || null,
-        featured_artist_ids: song.featured_artist_ids || [],
-        collection_id: song.collection_id || null,
-        lyrics: song.lyrics || '',
-        authorship: song.authorship || 'original',
-        style_prompt: song.style_prompt || '',
-        style_secondary: song.style_secondary || '',
-        style_alternate: song.style_alternate || '',
-        exclusions: song.exclusions || '',
-        genre: song.genre || '',
-        mood: song.mood || '',
-        tempo: song.tempo || '',
-        themes: song.themes || [],
-        status: song.status || 'draft',
-        notes: song.notes || '',
-        todo: song.todo || [],
-        versions: song.versions || [],
-        suno_generations: song.suno_generations || [],
-        saved_prompts: song.saved_prompts || [],
-        track_number: song.track_number || 0,
-      });
-    } catch (e) {
-      console.error('Failed to load song:', e);
-      Alert.alert('Network error', 'Could not load song. Please check your connection.');
-    }
+  setLoading(true);
+  try {
+    const res = await api.get(`/api/songs/${id}`);
+    const song = res.data;
+
+    setForm({
+      title: song.title || '',
+      artist_id: song.artist_id || null,
+      featured_artist_ids: song.featured_artist_ids || [],
+      collection_id: song.collection_id || null,
+      lyrics: song.lyrics || '',
+      authorship: song.authorship || 'original',
+      style_prompt: song.style_prompt || '',
+      style_secondary: song.style_secondary || '',
+      style_alternate: song.style_alternate || '',
+      exclusions: song.exclusions || '',
+      genre: song.genre || '',
+      mood: song.mood || '',
+      tempo: song.tempo || '',
+      themes: song.themes || [],
+      status: song.status || 'draft',
+      notes: song.notes || '',
+      todo: song.todo || [],
+      versions: song.versions || [],
+      suno_generations: song.suno_generations || [],
+      saved_prompts: song.saved_prompts || [],
+      track_number: song.track_number || 0,
+    });
+  } catch (error: any) {
+    Alert.alert('Network error', formatApiError(error, `/api/songs/${id}`));
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   const handleSave = async () => {
     if (!form.title.trim()) {

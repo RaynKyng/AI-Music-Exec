@@ -16,6 +16,7 @@ import { StatusBadge } from '../../src/components/StatusBadge';
 import { LoadingSpinner } from '../../src/components/LoadingSpinner';
 import { colors, spacing, statusColors } from '../../src/utils/theme';
 import { safeGoBack } from '../../src/utils/nav';
+import { api, formatApiError } from '../../src/utils/api';
 
 const API_URL = (process.env.EXPO_PUBLIC_BACKEND_URL || "https://artist-catalog-pro.emergent.host");
 const COLL_TYPES = ['EP', 'LP', 'Single', 'Album', 'Playlist'];
@@ -59,28 +60,33 @@ export default function CollectionDetailScreen() {
   );
 
   const loadCollection = async () => {
-    try {
-      const [collRes, tracksRes] = await Promise.all([
-        authFetch(`${API_URL}/api/collections/${id}`),
-        authFetch(`${API_URL}/api/collections/${id}/songs`),
-      ]);
-      if (collRes.ok) {
-        const coll = await collRes.json();
-        setForm({
-          title: coll.title || '', artist_id: coll.artist_id || '',
-          collection_type: coll.collection_type || 'EP',
-          cover_image_url: coll.cover_image_url || '',
-          description: coll.description || '', release_date: coll.release_date || '',
-          status: coll.status || 'in_progress', notes: coll.notes || '',
-        });
-      }
-      if (tracksRes.ok) {
-        const t = await tracksRes.json();
-        setTracks(Array.isArray(t) ? t : []);
-      }
-    } catch { /* ignore */ }
-    finally { setLoading(false); }
-  };
+  setLoading(true);
+  try {
+    const [collRes, tracksRes] = await Promise.all([
+      api.get(`/api/collections/${id}`),
+      api.get(`/api/collections/${id}/songs`),
+    ]);
+
+    const coll = collRes.data;
+    setForm({
+      title: coll.title || '',
+      artist_id: coll.artist_id || '',
+      collection_type: coll.collection_type || 'EP',
+      cover_image_url: coll.cover_image_url || '',
+      description: coll.description || '',
+      release_date: coll.release_date || '',
+      status: coll.status || 'in_progress',
+      notes: coll.notes || '',
+    });
+
+    const t = tracksRes.data;
+    setTracks(Array.isArray(t) ? t : []);
+  } catch (error: any) {
+    Alert.alert('Network error', formatApiError(error, `/api/collections/${id}`));
+  } finally {
+    setLoading(false);
+  }
+};
 
   const reorderTrack = async (songId: string, swapSongId: string, newPos: number, oldPos: number) => {
     // Swap track_number between the two songs
